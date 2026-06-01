@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Orari Dipendenti</title>
+  <meta name="theme-color" content="#f97316" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Firestore collegato</p>
+        <h1>Orari dipendenti</h1>
+        <p class="muted header-subtitle">Turni, report giornalieri e mensili condivisi su tutti i dispositivi</p>
+      </div>
+      <button id="logoutBtn" class="btn ghost hidden">Esci</button>
+    </header>
+
+    <section id="loginView" class="card login-card">
+      <div class="login-icon">⏱️</div>
+      <h2>Login</h2>
+      <p class="muted">Entra come amministratore o come dipendente.</p>
+
+      <div class="form-grid one">
+        <label>
+          Username
+          <input id="loginUsername" type="text" autocomplete="username" placeholder="admin" />
+        </label>
+        <label>
+          Password
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="admin123" />
+        </label>
+      </div>
+
+      <button id="loginBtn" class="btn primary full">Entra</button>
+      <p id="loginMessage" class="message"></p>
+
+      <div class="hint-box">
+        <strong>Accesso iniziale admin</strong><br />
+        Username: <code>admin</code> · Password: <code>admin123</code><br />
+        Il primo admin viene creato automaticamente su Firestore.
+      </div>
+    </section>
+
+    <main id="appView" class="hidden">
+      <section class="card user-bar">
+        <div>
+          <p class="muted small">Utente collegato</p>
+          <h2 id="currentUserName">-</h2>
+          <p id="currentRole" class="pill">-</p>
+        </div>
+        <div class="date-box">
+          <label>
+            Data
+            <input id="selectedDate" type="date" />
+          </label>
+          <label>
+            Mese report
+            <input id="selectedMonth" type="month" />
+          </label>
+        </div>
+      </section>
+
+      <section id="adminPanel" class="card hidden">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Admin</p>
+            <h2>Gestione dipendenti</h2>
+          </div>
+        </div>
+
+        <div class="form-grid employee-form">
+          <label>
+            Nome dipendente
+            <input id="employeeName" type="text" placeholder="Es. Marco" />
+          </label>
+          <label>
+            Username
+            <input id="employeeUsername" type="text" placeholder="marco" />
+          </label>
+          <label>
+            Password
+            <input id="employeePassword" type="text" placeholder="password" />
+          </label>
+          <label>
+            Paga oraria €
+            <input id="employeeRate" type="number" min="0" step="0.5" value="10" />
+          </label>
+        </div>
+
+        <div class="actions-row">
+          <button id="addEmployeeBtn" class="btn primary">Aggiungi dipendente</button>
+          <button id="refreshBtn" class="btn ghost">Aggiorna dati</button>
+        </div>
+        <p id="employeeMessage" class="message"></p>
+
+        <div class="table-wrap compact-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Username</th>
+                <th>€/h</th>
+                <th>Stato</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="employeesTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="employeePanel" class="card">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Orari</p>
+            <h2 id="hoursTitle">I miei orari</h2>
+          </div>
+          <p id="dailyTotalBadge" class="total-badge">0 ore</p>
+        </div>
+
+        <div id="adminEmployeeSelector" class="admin-selector hidden">
+          <label>
+            Modifica orari di
+            <select id="workUserSelect"></select>
+          </label>
+        </div>
+
+        <div class="range-box">
+          <h3>Inserimento rapido</h3>
+          <p class="muted">Scegli inizio e fine: vengono selezionati tutti gli slot da mezz’ora compresi nella fascia.</p>
+          <div class="form-grid range-form">
+            <label>
+              Inizio
+              <select id="startTime"></select>
+            </label>
+            <label>
+              Fine
+              <select id="endTime"></select>
+            </label>
+            <button id="applyRangeBtn" class="btn secondary">Aggiungi fascia</button>
+          </div>
+        </div>
+
+        <div class="slot-tools">
+          <button id="selectAllBtn" class="btn ghost">Tutto il giorno</button>
+          <button id="clearDayBtn" class="btn ghost">Svuota</button>
+          <button id="saveDayBtn" class="btn primary">Salva orari</button>
+        </div>
+        <p id="saveMessage" class="message"></p>
+
+        <div class="slots-header">
+          <span>Da mezzanotte a fine giornata</span>
+          <span>48 slot da 30 minuti</span>
+        </div>
+        <div id="slotsGrid" class="slots-grid" aria-label="Slot orari"></div>
+      </section>
+
+      <section class="grid-two">
+        <section class="card">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Report</p>
+              <h2>Giornaliero</h2>
+            </div>
+          </div>
+          <div id="dailyReport"></div>
+        </section>
+
+        <section class="card">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Report</p>
+              <h2>Mensile</h2>
+            </div>
+          </div>
+          <div id="monthlyReport"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
