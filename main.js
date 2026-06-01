@@ -291,7 +291,23 @@ async function saveSelectedDay() {
   const totalHours = slots.length * 0.5;
 
   if (!date) return alert("Seleziona una data.");
-  // Permette di salvare anche 0 ore: serve per cancellare una giornata già inserita.
+
+  const ref = doc(db, "workSessions", `${state.currentUser.id}_${date}`);
+
+  // Se non ci sono slot, non salvo una giornata a 0: elimino proprio il documento.
+  // Così un orario inserito per errore sparisce dai report e non ricompare al ricaricamento.
+  if (slots.length === 0) {
+    await deleteDoc(ref);
+    setMsg(els.saveMsg, "Orario cancellato: giornata senza ore lavorate.", "success");
+
+    if (state.currentUser.role === "admin") {
+      await loadAdminDayReport();
+      await loadAdminMonthReport();
+    }
+    await loadMyReports();
+    renderSelectedState();
+    return;
+  }
 
   const payload = {
     employeeId: state.currentUser.id,
@@ -303,8 +319,8 @@ async function saveSelectedDay() {
     updatedAt: serverTimestamp()
   };
 
-  await setDoc(doc(db, "workSessions", `${state.currentUser.id}_${date}`), payload);
-  setMsg(els.saveMsg, totalHours === 0 ? "Giornata svuotata: 0 ore salvate." : "Orari salvati correttamente.", "success");
+  await setDoc(ref, payload);
+  setMsg(els.saveMsg, "Orari salvati correttamente.", "success");
 
   if (state.currentUser.role === "admin") {
     await loadAdminDayReport();
