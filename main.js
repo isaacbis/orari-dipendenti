@@ -291,7 +291,7 @@ async function saveSelectedDay() {
   const totalHours = slots.length * 0.5;
 
   if (!date) return alert("Seleziona una data.");
-  if (!slots.length) return alert("Seleziona almeno uno slot.");
+  // Permette di salvare anche 0 ore: serve per cancellare una giornata già inserita.
 
   const payload = {
     employeeId: state.currentUser.id,
@@ -304,7 +304,7 @@ async function saveSelectedDay() {
   };
 
   await setDoc(doc(db, "workSessions", `${state.currentUser.id}_${date}`), payload);
-  setMsg(els.saveMsg, "Orari salvati correttamente.", "success");
+  setMsg(els.saveMsg, totalHours === 0 ? "Giornata svuotata: 0 ore salvate." : "Orari salvati correttamente.", "success");
 
   if (state.currentUser.role === "admin") {
     await loadAdminDayReport();
