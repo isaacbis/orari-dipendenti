@@ -2,188 +2,224 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Orari Dipendenti</title>
-  <meta name="theme-color" content="#f97316" />
+  <meta name="theme-color" content="#ff8a2c" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="bg-glow"></div>
   <div class="app-shell">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">Firestore collegato</p>
+    <section id="loginView" class="page center-page">
+      <div class="brand-box">
+        <div class="brand-badge">T38</div>
         <h1>Orari dipendenti</h1>
-        <p class="muted header-subtitle">Turni, report giornalieri e mensili condivisi su tutti i dispositivi</p>
-      </div>
-      <button id="logoutBtn" class="btn ghost hidden">Esci</button>
-    </header>
-
-    <section id="loginView" class="card login-card">
-      <div class="login-icon">⏱️</div>
-      <h2>Login</h2>
-      <p class="muted">Entra come amministratore o come dipendente.</p>
-
-      <div class="form-grid one">
-        <label>
-          Username
-          <input id="loginUsername" type="text" autocomplete="username" placeholder="admin" />
-        </label>
-        <label>
-          Password
-          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="admin123" />
-        </label>
+        <p>Accesso amministratore e dipendenti, ottimizzato per cellulare.</p>
       </div>
 
-      <button id="loginBtn" class="btn primary full">Entra</button>
-      <p id="loginMessage" class="message"></p>
+      <div class="card card-login">
+        <div class="section-head compact">
+          <h2>Login</h2>
+          <span class="chip chip-soft">Cloud Firestore</span>
+        </div>
 
-      <div class="hint-box">
-        <strong>Accesso iniziale admin</strong><br />
-        Username: <code>admin</code> · Password: <code>admin123</code><br />
-        Il primo admin viene creato automaticamente su Firestore.
+        <div class="field">
+          <label for="loginUsername">Username</label>
+          <input id="loginUsername" type="text" placeholder="Inserisci username" autocomplete="username" />
+        </div>
+
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" placeholder="Inserisci password" autocomplete="current-password" />
+        </div>
+
+        <button id="loginBtn" class="btn btn-primary btn-lg">Entra</button>
+        <p id="loginMsg" class="msg"></p>
+
+        <div class="demo-box">
+          <strong>Accesso iniziale</strong>
+          <div>Username: <code>admin</code></div>
+          <div>Password: <code>admin123</code></div>
+        </div>
       </div>
     </section>
 
-    <main id="appView" class="hidden">
-      <section class="card user-bar">
+    <section id="appView" class="page hidden">
+      <header class="topbar card sticky-top">
         <div>
-          <p class="muted small">Utente collegato</p>
-          <h2 id="currentUserName">-</h2>
-          <p id="currentRole" class="pill">-</p>
+          <p class="eyebrow">Benvenuto</p>
+          <h2 id="welcomeName">Utente</h2>
         </div>
-        <div class="date-box">
-          <label>
-            Data
-            <input id="selectedDate" type="date" />
-          </label>
-          <label>
-            Mese report
-            <input id="selectedMonth" type="month" />
-          </label>
+        <div class="topbar-actions">
+          <span id="roleBadge" class="chip">Dipendente</span>
+          <button id="logoutBtn" class="btn btn-light btn-sm">Esci</button>
         </div>
-      </section>
+      </header>
 
-      <section id="adminPanel" class="card hidden">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">Admin</p>
-            <h2>Gestione dipendenti</h2>
-          </div>
-        </div>
+      <nav class="nav-tabs card">
+        <button class="tab-btn active" data-tab="tabSchedule">Orari</button>
+        <button class="tab-btn" data-tab="tabReports">Report</button>
+        <button class="tab-btn hidden" id="adminTabBtn" data-tab="tabAdmin">Admin</button>
+      </nav>
 
-        <div class="form-grid employee-form">
-          <label>
-            Nome dipendente
-            <input id="employeeName" type="text" placeholder="Es. Marco" />
-          </label>
-          <label>
-            Username
-            <input id="employeeUsername" type="text" placeholder="marco" />
-          </label>
-          <label>
-            Password
-            <input id="employeePassword" type="text" placeholder="password" />
-          </label>
-          <label>
-            Paga oraria €
-            <input id="employeeRate" type="number" min="0" step="0.5" value="10" />
-          </label>
-        </div>
+      <main class="content-stack">
+        <section id="tabSchedule" class="tab-panel active">
+          <div class="card">
+            <div class="section-head">
+              <h3>Seleziona giorno</h3>
+              <span class="chip chip-soft">Mezz'ora</span>
+            </div>
 
-        <div class="actions-row">
-          <button id="addEmployeeBtn" class="btn primary">Aggiungi dipendente</button>
-          <button id="refreshBtn" class="btn ghost">Aggiorna dati</button>
-        </div>
-        <p id="employeeMessage" class="message"></p>
+            <div class="field">
+              <label for="selectedDate">Data</label>
+              <input id="selectedDate" type="date" />
+            </div>
 
-        <div class="table-wrap compact-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Username</th>
-                <th>€/h</th>
-                <th>Stato</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="employeesTable"></tbody>
-          </table>
-        </div>
-      </section>
+            <div class="field-grid">
+              <div class="field">
+                <label for="rangeStart">Inizio</label>
+                <input id="rangeStart" type="time" step="1800" />
+              </div>
+              <div class="field">
+                <label for="rangeEnd">Fine</label>
+                <input id="rangeEnd" type="time" step="1800" />
+              </div>
+            </div>
 
-      <section id="employeePanel" class="card">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">Orari</p>
-            <h2 id="hoursTitle">I miei orari</h2>
-          </div>
-          <p id="dailyTotalBadge" class="total-badge">0 ore</p>
-        </div>
+            <button id="addRangeBtn" class="btn btn-secondary">Aggiungi fascia</button>
 
-        <div id="adminEmployeeSelector" class="admin-selector hidden">
-          <label>
-            Modifica orari di
-            <select id="workUserSelect"></select>
-          </label>
-        </div>
-
-        <div class="range-box">
-          <h3>Inserimento rapido</h3>
-          <p class="muted">Scegli inizio e fine: vengono selezionati tutti gli slot da mezz’ora compresi nella fascia.</p>
-          <div class="form-grid range-form">
-            <label>
-              Inizio
-              <select id="startTime"></select>
-            </label>
-            <label>
-              Fine
-              <select id="endTime"></select>
-            </label>
-            <button id="applyRangeBtn" class="btn secondary">Aggiungi fascia</button>
-          </div>
-        </div>
-
-        <div class="slot-tools">
-          <button id="selectAllBtn" class="btn ghost">Tutto il giorno</button>
-          <button id="clearDayBtn" class="btn ghost">Svuota</button>
-          <button id="saveDayBtn" class="btn primary">Salva orari</button>
-        </div>
-        <p id="saveMessage" class="message"></p>
-
-        <div class="slots-header">
-          <span>Da mezzanotte a fine giornata</span>
-          <span>48 slot da 30 minuti</span>
-        </div>
-        <div id="slotsGrid" class="slots-grid" aria-label="Slot orari"></div>
-      </section>
-
-      <section class="grid-two">
-        <section class="card">
-          <div class="section-title">
-            <div>
-              <p class="eyebrow">Report</p>
-              <h2>Giornaliero</h2>
+            <div class="stats-grid top-gap">
+              <div class="stat-card">
+                <span>Ore del giorno</span>
+                <strong id="dayHours">0.00</strong>
+              </div>
+              <div class="stat-card">
+                <span>Slot selezionati</span>
+                <strong id="slotCount">0</strong>
+              </div>
             </div>
           </div>
-          <div id="dailyReport"></div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Selezione rapida</h3>
+              <button id="clearSlotsBtn" class="btn btn-light btn-sm">Svuota</button>
+            </div>
+            <p class="helper">Tocca gli orari per attivare o disattivare gli slot. Nessuno spostamento laterale della pagina.</p>
+            <div id="slotGrid" class="slot-grid"></div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Fasce selezionate</h3>
+            </div>
+            <div id="selectedRanges" class="range-list"></div>
+            <button id="saveDayBtn" class="btn btn-primary btn-lg top-gap">Salva orari</button>
+            <p id="saveMsg" class="msg"></p>
+          </div>
         </section>
 
-        <section class="card">
-          <div class="section-title">
-            <div>
-              <p class="eyebrow">Report</p>
-              <h2>Mensile</h2>
+        <section id="tabReports" class="tab-panel">
+          <div class="card">
+            <div class="section-head">
+              <h3>Report personale</h3>
+            </div>
+            <div class="field">
+              <label for="reportMonth">Mese</label>
+              <input id="reportMonth" type="month" />
+            </div>
+            <button id="loadMyReportBtn" class="btn btn-secondary">Aggiorna report</button>
+
+            <div class="stats-grid top-gap">
+              <div class="stat-card">
+                <span>Ore mese</span>
+                <strong id="myMonthHours">0.00</strong>
+              </div>
+              <div class="stat-card">
+                <span>Guadagno mese</span>
+                <strong id="myMonthPay">€ 0.00</strong>
+              </div>
+              <div class="stat-card">
+                <span>Ore totali</span>
+                <strong id="myTotalHours">0.00</strong>
+              </div>
+              <div class="stat-card">
+                <span>Guadagno totale</span>
+                <strong id="myTotalPay">€ 0.00</strong>
+              </div>
             </div>
           </div>
-          <div id="monthlyReport"></div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Riepilogo del giorno</h3>
+            </div>
+            <div id="myDaySummary" class="summary-list"></div>
+          </div>
         </section>
-      </section>
-    </main>
+
+        <section id="tabAdmin" class="tab-panel">
+          <div class="card">
+            <div class="section-head">
+              <h3>Nuovo dipendente</h3>
+            </div>
+            <div class="field-grid single-mobile">
+              <div class="field">
+                <label for="empName">Nome e cognome</label>
+                <input id="empName" type="text" placeholder="Mario Rossi" />
+              </div>
+              <div class="field">
+                <label for="empUsername">Username</label>
+                <input id="empUsername" type="text" placeholder="mario" />
+              </div>
+              <div class="field">
+                <label for="empPassword">Password</label>
+                <input id="empPassword" type="text" placeholder="1234" />
+              </div>
+              <div class="field">
+                <label for="empRate">Paga oraria (€)</label>
+                <input id="empRate" type="number" min="0" step="0.01" placeholder="10" />
+              </div>
+            </div>
+            <button id="createEmployeeBtn" class="btn btn-primary">Crea dipendente</button>
+            <p id="createEmployeeMsg" class="msg"></p>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Dipendenti</h3>
+            </div>
+            <div id="employeeList" class="employee-list"></div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Report giornaliero</h3>
+            </div>
+            <div class="field">
+              <label for="adminDay">Data</label>
+              <input id="adminDay" type="date" />
+            </div>
+            <button id="loadAdminDayBtn" class="btn btn-secondary">Carica report giornaliero</button>
+            <div id="adminDayReport" class="report-cards top-gap"></div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Report mensile</h3>
+            </div>
+            <div class="field">
+              <label for="adminMonth">Mese</label>
+              <input id="adminMonth" type="month" />
+            </div>
+            <button id="loadAdminMonthBtn" class="btn btn-secondary">Carica report mensile</button>
+            <div id="adminMonthReport" class="report-cards top-gap"></div>
+          </div>
+        </section>
+      </main>
+    </section>
   </div>
 
   <script type="module" src="main.js"></script>

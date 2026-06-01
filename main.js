@@ -1,16 +1,18 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-analytics.js";
 import {
   getFirestore,
   collection,
+  getDocs,
   query,
   where,
-  getDocs,
   doc,
   getDoc,
   setDoc,
   addDoc,
-  updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  orderBy,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -25,568 +27,481 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+try { getAnalytics(app); } catch {}
 const db = getFirestore(app);
-
-const $ = (id) => document.getElementById(id);
 
 const state = {
   currentUser: null,
   employees: [],
   selectedSlots: new Set(),
+  slots: generateSlots(),
 };
 
-function pad(n) {
-  return String(n).padStart(2, "0");
+const $ = (id) => document.getElementById(id);
+
+const els = {
+  loginView: $("loginView"),
+  appView: $("appView"),
+  loginUsername: $("loginUsername"),
+  loginPassword: $("loginPassword"),
+  loginBtn: $("loginBtn"),
+  loginMsg: $("loginMsg"),
+  logoutBtn: $("logoutBtn"),
+  welcomeName: $("welcomeName"),
+  roleBadge: $("roleBadge"),
+  adminTabBtn: $("adminTabBtn"),
+  selectedDate: $("selectedDate"),
+  rangeStart: $("rangeStart"),
+  rangeEnd: $("rangeEnd"),
+  addRangeBtn: $("addRangeBtn"),
+  dayHours: $("dayHours"),
+  slotCount: $("slotCount"),
+  slotGrid: $("slotGrid"),
+  clearSlotsBtn: $("clearSlotsBtn"),
+  selectedRanges: $("selectedRanges"),
+  saveDayBtn: $("saveDayBtn"),
+  saveMsg: $("saveMsg"),
+  reportMonth: $("reportMonth"),
+  loadMyReportBtn: $("loadMyReportBtn"),
+  myMonthHours: $("myMonthHours"),
+  myMonthPay: $("myMonthPay"),
+  myTotalHours: $("myTotalHours"),
+  myTotalPay: $("myTotalPay"),
+  myDaySummary: $("myDaySummary"),
+  empName: $("empName"),
+  empUsername: $("empUsername"),
+  empPassword: $("empPassword"),
+  empRate: $("empRate"),
+  createEmployeeBtn: $("createEmployeeBtn"),
+  createEmployeeMsg: $("createEmployeeMsg"),
+  employeeList: $("employeeList"),
+  adminDay: $("adminDay"),
+  adminMonth: $("adminMonth"),
+  loadAdminDayBtn: $("loadAdminDayBtn"),
+  loadAdminMonthBtn: $("loadAdminMonthBtn"),
+  adminDayReport: $("adminDayReport"),
+  adminMonthReport: $("adminMonthReport"),
+};
+
+init();
+
+async function init() {
+  setDefaultDates();
+  bindEvents();
+  renderSlotGrid();
+  await ensureAdminExists();
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
+function bindEvents() {
+  els.loginBtn.addEventListener("click", handleLogin);
+  els.logoutBtn.addEventListener("click", logout);
+  els.selectedDate.addEventListener("change", loadSelectedDay);
+  els.addRangeBtn.addEventListener("click", addRangeFromInputs);
+  els.clearSlotsBtn.addEventListener("click", clearSelection);
+  els.saveDayBtn.addEventListener("click", saveSelectedDay);
+  els.loadMyReportBtn.addEventListener("click", loadMyReports);
+  els.createEmployeeBtn.addEventListener("click", createEmployee);
+  els.loadAdminDayBtn.addEventListener("click", loadAdminDayReport);
+  els.loadAdminMonthBtn.addEventListener("click", loadAdminMonthReport);
 
-function currentMonthISO() {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-}
-
-function minutesToTime(minutes) {
-  if (minutes === 1440) return "24:00";
-  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-}
-
-function timeToMinutes(time) {
-  if (time === "24:00") return 1440;
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function allSlotStarts() {
-  return Array.from({ length: 48 }, (_, i) => minutesToTime(i * 30));
-}
-
-function allTimeBoundaries() {
-  return Array.from({ length: 49 }, (_, i) => minutesToTime(i * 30));
-}
-
-function slotToLabel(slot) {
-  const start = timeToMinutes(slot);
-  return `${slot}-${minutesToTime(start + 30)}`;
-}
-
-function calculateHours(slots) {
-  return slots.length * 0.5;
-}
-
-function selectedUserIdForWork() {
-  if (state.currentUser?.role === "admin") {
-    return $("workUserSelect").value || state.currentUser.id;
-  }
-  return state.currentUser?.id;
-}
-
-function shiftId(userId, date) {
-  return `${userId}_${date}`;
-}
-
-function setMessage(el, text, type = "") {
-  el.textContent = text;
-  el.className = `message ${type}`.trim();
-}
-
-function escapeHTML(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function slotsToRanges(slots) {
-  const sorted = [...slots].map(timeToMinutes).sort((a, b) => a - b);
-  if (!sorted.length) return "-";
-
-  const ranges = [];
-  let start = sorted[0];
-  let previous = sorted[0];
-
-  for (let i = 1; i <= sorted.length; i++) {
-    const current = sorted[i];
-    if (current !== previous + 30) {
-      ranges.push(`${minutesToTime(start)}-${minutesToTime(previous + 30)}`);
-      start = current;
-    }
-    previous = current;
-  }
-
-  return ranges.join(" · ");
-}
-
-function slotArrayToRangeObjects(slots) {
-  const text = slotsToRanges(slots);
-  if (text === "-") return [];
-  return text.split(" · ").map((part) => {
-    const [start, end] = part.split("-");
-    return { start, end };
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => activateTab(btn.dataset.tab, btn));
   });
 }
 
-async function ensureDefaultAdmin() {
+function activateTab(tabId, btn) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  $(tabId).classList.add("active");
+}
+
+async function ensureAdminExists() {
   const q = query(collection(db, "employees"), where("username", "==", "admin"));
   const snap = await getDocs(q);
-  if (!snap.empty) return;
+  if (snap.empty) {
+    await addDoc(collection(db, "employees"), {
+      name: "Admin",
+      username: "admin",
+      password: "admin123",
+      role: "admin",
+      hourlyRate: 0,
+      active: true,
+      createdAt: serverTimestamp()
+    });
+  }
+}
 
-  await addDoc(collection(db, "employees"), {
-    name: "Amministratore",
-    username: "admin",
-    password: "admin123",
-    role: "admin",
-    hourlyRate: 0,
-    active: true,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+async function handleLogin() {
+  const username = els.loginUsername.value.trim();
+  const password = els.loginPassword.value.trim();
+  if (!username || !password) return setMsg(els.loginMsg, "Inserisci username e password.", "error");
+
+  const q = query(collection(db, "employees"), where("username", "==", username));
+  const snap = await getDocs(q);
+  if (snap.empty) return setMsg(els.loginMsg, "Credenziali non valide.", "error");
+
+  const docSnap = snap.docs.find(d => {
+    const data = d.data();
+    return data.password === password && data.active === true;
   });
-}
+  if (!docSnap) return setMsg(els.loginMsg, "Credenziali non valide.", "error");
 
-async function fetchEmployees(includeInactive = false) {
-  const snap = await getDocs(collection(db, "employees"));
-  const employees = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  return employees
-    .filter((user) => includeInactive || user.active !== false)
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-}
+  state.currentUser = { id: docSnap.id, ...docSnap.data() };
+  els.welcomeName.textContent = state.currentUser.name;
+  els.roleBadge.textContent = state.currentUser.role === "admin" ? "Admin" : "Dipendente";
+  els.adminTabBtn.classList.toggle("hidden", state.currentUser.role !== "admin");
+  els.loginView.classList.add("hidden");
+  els.appView.classList.remove("hidden");
+  setMsg(els.loginMsg, "");
 
-async function login() {
-  const username = $("loginUsername").value.trim().toLowerCase();
-  const password = $("loginPassword").value.trim();
-
-  if (!username || !password) {
-    setMessage($("loginMessage"), "Inserisci username e password.", "err");
-    return;
+  if (state.currentUser.role === "admin") {
+    await loadEmployees();
+    await loadAdminDayReport();
+    await loadAdminMonthReport();
   }
 
-  setMessage($("loginMessage"), "Accesso in corso…");
-
-  try {
-    await ensureDefaultAdmin();
-
-    const q = query(
-      collection(db, "employees"),
-      where("username", "==", username),
-      where("password", "==", password),
-      where("active", "==", true)
-    );
-    const snap = await getDocs(q);
-
-    if (snap.empty) {
-      setMessage($("loginMessage"), "Credenziali non valide.", "err");
-      return;
-    }
-
-    const docSnap = snap.docs[0];
-    state.currentUser = { id: docSnap.id, ...docSnap.data() };
-    await openApp();
-  } catch (error) {
-    console.error(error);
-    setMessage($("loginMessage"), "Errore Firebase. Controlla Firestore e le regole.", "err");
-  }
-}
-
-async function openApp() {
-  $("loginView").classList.add("hidden");
-  $("appView").classList.remove("hidden");
-  $("logoutBtn").classList.remove("hidden");
-  $("currentUserName").textContent = state.currentUser.name;
-  $("currentRole").textContent = state.currentUser.role === "admin" ? "Amministratore" : "Dipendente";
-
-  const isAdmin = state.currentUser.role === "admin";
-  $("adminPanel").classList.toggle("hidden", !isAdmin);
-  $("adminEmployeeSelector").classList.toggle("hidden", !isAdmin);
-
-  $("selectedDate").value = todayISO();
-  $("selectedMonth").value = currentMonthISO();
-
-  await refreshAll();
+  await loadSelectedDay();
+  await loadMyReports();
 }
 
 function logout() {
   state.currentUser = null;
-  state.employees = [];
   state.selectedSlots = new Set();
-  $("appView").classList.add("hidden");
-  $("logoutBtn").classList.add("hidden");
-  $("loginView").classList.remove("hidden");
-  $("loginPassword").value = "";
-  setMessage($("loginMessage"), "");
+  renderSelectedState();
+  els.appView.classList.add("hidden");
+  els.loginView.classList.remove("hidden");
+  els.loginUsername.value = "";
+  els.loginPassword.value = "";
+  activateTab("tabSchedule", document.querySelector('[data-tab="tabSchedule"]'));
 }
 
-async function refreshAll() {
-  if (!state.currentUser) return;
-  await renderEmployees();
-  await loadSelectedShift();
-  await renderReports();
+function setDefaultDates() {
+  const today = new Date();
+  const ymd = dateToYMD(today);
+  const ym = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  els.selectedDate.value = ymd;
+  els.adminDay.value = ymd;
+  els.reportMonth.value = ym;
+  els.adminMonth.value = ym;
 }
 
-function buildTimeSelects() {
-  const start = $("startTime");
-  const end = $("endTime");
-  start.innerHTML = "";
-  end.innerHTML = "";
+function generateSlots() {
+  const list = [];
+  for (let m = 0; m < 24 * 60; m += 30) list.push(minutesToTime(m));
+  return list;
+}
 
-  allTimeBoundaries().forEach((time, index) => {
-    if (index < 48) start.add(new Option(time, time));
-    if (index > 0) end.add(new Option(time, time));
+function renderSlotGrid() {
+  els.slotGrid.innerHTML = "";
+  state.slots.forEach(time => {
+    const btn = document.createElement("button");
+    btn.className = "slot-btn";
+    btn.textContent = time;
+    btn.type = "button";
+    btn.addEventListener("click", () => toggleSlot(time));
+    els.slotGrid.appendChild(btn);
+  });
+  renderSelectedState();
+}
+
+function toggleSlot(time) {
+  if (state.selectedSlots.has(time)) state.selectedSlots.delete(time);
+  else state.selectedSlots.add(time);
+  renderSelectedState();
+}
+
+function clearSelection() {
+  state.selectedSlots = new Set();
+  renderSelectedState();
+}
+
+function renderSelectedState() {
+  const buttons = [...els.slotGrid.querySelectorAll(".slot-btn")];
+  buttons.forEach((btn, i) => {
+    const t = state.slots[i];
+    btn.classList.toggle("active", state.selectedSlots.has(t));
   });
 
-  start.value = "08:00";
-  end.value = "13:00";
-}
-
-function buildSlotsGrid() {
-  const grid = $("slotsGrid");
-  grid.innerHTML = "";
-
-  allSlotStarts().forEach((slot) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "slot";
-    button.dataset.slot = slot;
-    button.textContent = slot;
-    button.title = slotToLabel(slot);
-    button.addEventListener("click", async () => {
-      if (state.selectedSlots.has(slot)) state.selectedSlots.delete(slot);
-      else state.selectedSlots.add(slot);
-      renderSlots();
-      await renderReports();
+  const ranges = slotsToRanges([...state.selectedSlots]);
+  els.selectedRanges.innerHTML = "";
+  if (!ranges.length) {
+    els.selectedRanges.innerHTML = `<div class="range-item"><div class="range-main"><strong>Nessuna fascia selezionata</strong><small>Tocca gli slot o usa inizio/fine.</small></div></div>`;
+  } else {
+    ranges.forEach(range => {
+      const div = document.createElement("div");
+      div.className = "range-item";
+      div.innerHTML = `
+        <div class="range-main">
+          <strong>${range.start} - ${range.end}</strong>
+          <small>${rangeHours(range).toFixed(2)} ore</small>
+        </div>
+        <button class="btn btn-light btn-sm" type="button">Rimuovi</button>
+      `;
+      div.querySelector("button").addEventListener("click", () => removeRange(range));
+      els.selectedRanges.appendChild(div);
     });
-    grid.appendChild(button);
-  });
+  }
+
+  els.slotCount.textContent = String(state.selectedSlots.size);
+  els.dayHours.textContent = (state.selectedSlots.size * 0.5).toFixed(2);
+  renderMyDaySummary(ranges);
 }
 
-function renderSlots() {
-  document.querySelectorAll(".slot").forEach((btn) => {
-    btn.classList.toggle("selected", state.selectedSlots.has(btn.dataset.slot));
-  });
-  $("dailyTotalBadge").textContent = `${calculateHours([...state.selectedSlots]).toFixed(1)} ore`;
+function removeRange(range) {
+  for (let m = timeToMinutes(range.start); m < timeToMinutes(range.end); m += 30) {
+    state.selectedSlots.delete(minutesToTime(m));
+  }
+  renderSelectedState();
 }
 
-async function loadSelectedShift() {
+function addRangeFromInputs() {
+  const start = els.rangeStart.value;
+  const end = els.rangeEnd.value;
+  if (!start || !end) return alert("Inserisci ora di inizio e fine.");
+  const startM = timeToMinutes(start);
+  const endM = timeToMinutes(end);
+  if (endM <= startM) return alert("L'orario di fine deve essere dopo l'inizio.");
+  if (startM % 30 !== 0 || endM % 30 !== 0) return alert("Usa orari a mezz'ora (es. 08:00, 08:30).");
+
+  for (let m = startM; m < endM; m += 30) {
+    state.selectedSlots.add(minutesToTime(m));
+  }
+  renderSelectedState();
+}
+
+async function loadSelectedDay() {
   if (!state.currentUser) return;
-
-  const userId = selectedUserIdForWork();
-  const date = $("selectedDate").value;
-  state.selectedSlots = new Set();
-
-  if (userId && date) {
-    const shiftSnap = await getDoc(doc(db, "workSessions", shiftId(userId, date)));
-    if (shiftSnap.exists()) {
-      state.selectedSlots = new Set(shiftSnap.data().slots || []);
-    }
+  clearSelection();
+  const id = `${state.currentUser.id}_${els.selectedDate.value}`;
+  const ref = doc(db, "workSessions", id);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const data = snap.data();
+    state.selectedSlots = new Set(data.slots || []);
+    renderSelectedState();
   }
-
-  const user = state.employees.find((item) => item.id === userId) || state.currentUser;
-  $("hoursTitle").textContent = state.currentUser.role === "admin"
-    ? `Orari di ${user?.name || "dipendente"}`
-    : "I miei orari";
-
-  renderSlots();
-  await renderReports();
 }
 
-async function renderEmployees() {
+async function saveSelectedDay() {
   if (!state.currentUser) return;
+  const date = els.selectedDate.value;
+  const slots = [...state.selectedSlots].sort();
+  const ranges = slotsToRanges(slots);
+  const totalHours = slots.length * 0.5;
 
-  state.employees = await fetchEmployees(true);
-  const tbody = $("employeesTable");
-  const select = $("workUserSelect");
-  tbody.innerHTML = "";
-  select.innerHTML = "";
+  if (!date) return alert("Seleziona una data.");
+  if (!slots.length) return alert("Seleziona almeno uno slot.");
 
-  const activeEmployees = state.employees.filter((user) => user.active !== false && user.role === "employee");
+  const payload = {
+    employeeId: state.currentUser.id,
+    employeeName: state.currentUser.name,
+    date,
+    slots,
+    ranges,
+    totalHours,
+    updatedAt: serverTimestamp()
+  };
 
-  activeEmployees.forEach((user) => {
-    select.add(new Option(user.name, user.id));
-  });
+  await setDoc(doc(db, "workSessions", `${state.currentUser.id}_${date}`), payload);
+  setMsg(els.saveMsg, "Orari salvati correttamente.", "success");
 
-  if (!activeEmployees.length) {
-    select.add(new Option("Nessun dipendente", ""));
+  if (state.currentUser.role === "admin") {
+    await loadAdminDayReport();
+    await loadAdminMonthReport();
   }
-
-  const visibleRows = state.employees.filter((user) => user.role === "employee");
-
-  visibleRows.forEach((user) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${escapeHTML(user.name)}</strong></td>
-      <td>${escapeHTML(user.username)}</td>
-      <td>${Number(user.hourlyRate || 0).toFixed(2)}</td>
-      <td>${user.active === false ? "Disattivato" : "Attivo"}</td>
-      <td>
-        ${user.active === false
-          ? `<button class="btn ghost small-btn" data-reactivate-user="${user.id}">Riattiva</button>`
-          : `<button class="btn danger small-btn" data-disable-user="${user.id}">Disattiva</button>`}
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  if (!visibleRows.length) {
-    tbody.innerHTML = `<tr><td colspan="5">Ancora nessun dipendente inserito.</td></tr>`;
-  }
+  await loadMyReports();
 }
 
-async function addEmployee() {
-  const name = $("employeeName").value.trim();
-  const username = $("employeeUsername").value.trim().toLowerCase();
-  const password = $("employeePassword").value.trim();
-  const hourlyRate = Number($("employeeRate").value || 0);
+async function loadMyReports() {
+  if (!state.currentUser) return;
+  const snap = await getDocs(query(collection(db, "workSessions"), where("employeeId", "==", state.currentUser.id)));
+  const month = els.reportMonth.value;
+  let monthHours = 0;
+  let totalHours = 0;
 
-  if (!name || !username || !password) {
-    setMessage($("employeeMessage"), "Compila nome, username e password.", "err");
+  snap.forEach(d => {
+    const data = d.data();
+    totalHours += data.totalHours || 0;
+    if (month && data.date?.startsWith(month)) monthHours += data.totalHours || 0;
+  });
+
+  const rate = Number(state.currentUser.hourlyRate || 0);
+  els.myMonthHours.textContent = monthHours.toFixed(2);
+  els.myMonthPay.textContent = `€ ${(monthHours * rate).toFixed(2)}`;
+  els.myTotalHours.textContent = totalHours.toFixed(2);
+  els.myTotalPay.textContent = `€ ${(totalHours * rate).toFixed(2)}`;
+}
+
+function renderMyDaySummary(ranges = slotsToRanges([...state.selectedSlots])) {
+  els.myDaySummary.innerHTML = "";
+  if (!ranges.length) {
+    els.myDaySummary.innerHTML = `<div class="summary-item"><strong>${els.selectedDate.value || 'Nessuna data'}</strong><small>Nessun orario registrato per il giorno selezionato.</small></div>`;
     return;
   }
+  const total = ranges.reduce((s, r) => s + rangeHours(r), 0);
+  const item = document.createElement("div");
+  item.className = "summary-item";
+  item.innerHTML = `
+    <strong>${els.selectedDate.value}</strong>
+    <div class="big">${ranges.map(r => `${r.start}-${r.end}`).join(" • ")}</div>
+    <small>Totale giornata: ${total.toFixed(2)} ore</small>
+  `;
+  els.myDaySummary.appendChild(item);
+}
 
-  const duplicate = await getDocs(query(collection(db, "employees"), where("username", "==", username)));
-  if (!duplicate.empty) {
-    setMessage($("employeeMessage"), "Username già esistente.", "err");
-    return;
-  }
+async function createEmployee() {
+  const name = els.empName.value.trim();
+  const username = els.empUsername.value.trim();
+  const password = els.empPassword.value.trim();
+  const hourlyRate = Number(els.empRate.value || 0);
+
+  if (!name || !username || !password) return setMsg(els.createEmployeeMsg, "Compila nome, username e password.", "error");
+
+  const exists = await getDocs(query(collection(db, "employees"), where("username", "==", username)));
+  if (!exists.empty) return setMsg(els.createEmployeeMsg, "Username già presente.", "error");
 
   await addDoc(collection(db, "employees"), {
     name,
     username,
     password,
-    role: "employee",
     hourlyRate,
+    role: "employee",
     active: true,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: serverTimestamp()
   });
 
-  $("employeeName").value = "";
-  $("employeeUsername").value = "";
-  $("employeePassword").value = "";
-  setMessage($("employeeMessage"), "Dipendente aggiunto su Firestore.", "ok");
-  await refreshAll();
+  els.empName.value = "";
+  els.empUsername.value = "";
+  els.empPassword.value = "";
+  els.empRate.value = "";
+  setMsg(els.createEmployeeMsg, "Dipendente creato con successo.", "success");
+  await loadEmployees();
 }
 
-async function setEmployeeActive(userId, active) {
-  const user = state.employees.find((item) => item.id === userId);
-  if (!user) return;
+async function loadEmployees() {
+  const snap = await getDocs(query(collection(db, "employees"), orderBy("name")));
+  state.employees = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  els.employeeList.innerHTML = "";
 
-  if (!active) {
-    const ok = confirm(`Disattivare ${user.name}? Non potrà più fare login, ma gli orari restano nei report.`);
-    if (!ok) return;
-  }
-
-  await updateDoc(doc(db, "employees", userId), {
-    active,
-    updatedAt: serverTimestamp(),
+  state.employees.forEach(emp => {
+    const item = document.createElement("div");
+    item.className = "employee-item";
+    item.innerHTML = `
+      <div>
+        <strong>${emp.name}</strong>
+        <small>@${emp.username} • ${emp.role === 'admin' ? 'Admin' : 'Dipendente'} • € ${Number(emp.hourlyRate || 0).toFixed(2)}/h</small>
+      </div>
+      ${emp.role === 'admin' ? '<span class="chip">Admin</span>' : '<button class="btn btn-light btn-sm" type="button">Elimina</button>'}
+    `;
+    const btn = item.querySelector("button");
+    if (btn) btn.addEventListener("click", async () => {
+      if (!confirm(`Eliminare ${emp.name}?`)) return;
+      await deleteDoc(doc(db, "employees", emp.id));
+      await loadEmployees();
+    });
+    els.employeeList.appendChild(item);
   });
-
-  await refreshAll();
 }
 
-function applyRange() {
-  const start = timeToMinutes($("startTime").value);
-  const end = timeToMinutes($("endTime").value);
+async function loadAdminDayReport() {
+  if (!state.currentUser || state.currentUser.role !== "admin") return;
+  const date = els.adminDay.value;
+  const snap = await getDocs(query(collection(db, "workSessions"), where("date", "==", date)));
+  const items = snap.docs.map(d => d.data()).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  els.adminDayReport.innerHTML = "";
 
-  if (end <= start) {
-    alert("L’orario di fine deve essere successivo all’orario di inizio.");
+  if (!items.length) {
+    els.adminDayReport.innerHTML = `<div class="report-item"><strong>Nessun dato</strong><small>Non ci sono orari salvati per ${date}.</small></div>`;
     return;
   }
 
-  for (let minute = start; minute < end; minute += 30) {
-    state.selectedSlots.add(minutesToTime(minute));
-  }
-
-  renderSlots();
-  renderReports();
-}
-
-async function saveSelectedDay() {
-  const userId = selectedUserIdForWork();
-  const date = $("selectedDate").value;
-
-  if (!userId) {
-    setMessage($("saveMessage"), "Prima crea o seleziona un dipendente.", "err");
-    return;
-  }
-
-  const employee = state.employees.find((item) => item.id === userId) || state.currentUser;
-  const slots = [...state.selectedSlots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
-  const totalHours = calculateHours(slots);
-
-  setMessage($("saveMessage"), "Salvataggio su Firestore…");
-
-  await setDoc(doc(db, "workSessions", shiftId(userId, date)), {
-    employeeId: userId,
-    employeeName: employee.name || "Dipendente",
-    date,
-    slots,
-    ranges: slotArrayToRangeObjects(slots),
-    totalHours,
-    updatedAt: serverTimestamp(),
+  items.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "report-item";
+    div.innerHTML = `
+      <strong>${item.employeeName}</strong>
+      <div class="big">${item.ranges?.map(r => `${r.start}-${r.end}`).join(" • ") || '-'}</div>
+      <small>${item.totalHours.toFixed(2)} ore</small>
+    `;
+    els.adminDayReport.appendChild(div);
   });
-
-  setMessage($("saveMessage"), "Orari salvati online.", "ok");
-  await renderReports();
 }
 
-async function fetchSessions() {
+async function loadAdminMonthReport() {
+  if (!state.currentUser || state.currentUser.role !== "admin") return;
+  const month = els.adminMonth.value;
   const snap = await getDocs(collection(db, "workSessions"));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
+  const filtered = snap.docs.map(d => d.data()).filter(x => x.date?.startsWith(month));
+  const map = new Map();
 
-async function renderReports() {
-  if (!state.currentUser) return;
-
-  const date = $("selectedDate").value;
-  const month = $("selectedMonth").value;
-  const isAdmin = state.currentUser.role === "admin";
-  const sessions = await fetchSessions();
-  const employeesById = new Map(state.employees.map((u) => [u.id, u]));
-
-  const scoped = isAdmin
-    ? sessions
-    : sessions.filter((shift) => shift.employeeId === state.currentUser.id);
-
-  const daily = scoped.filter((shift) => shift.date === date);
-  const monthly = scoped.filter((shift) => String(shift.date || "").startsWith(month));
-
-  renderDailyReport(daily, employeesById, isAdmin);
-  renderMonthlyReport(monthly, employeesById, isAdmin, month);
-}
-
-function renderDailyReport(items, employeesById, isAdmin) {
-  const target = $("dailyReport");
-  if (!items.length) {
-    target.innerHTML = `<p class="muted">Nessun orario salvato per questa data.</p>`;
-    return;
-  }
-
-  if (!isAdmin) {
-    const total = items.reduce((sum, item) => sum + Number(item.totalHours || 0), 0);
-    target.innerHTML = `
-      <div class="report-item featured">
-        <strong>Totale giorno</strong>
-        <span class="hours">${total.toFixed(1)} ore</span>
-        <p>${slotsToRanges(items.flatMap((item) => item.slots || []))}</p>
-      </div>
-    `;
-    return;
-  }
-
-  const rows = items
-    .sort((a, b) => (a.employeeName || "").localeCompare(b.employeeName || ""))
-    .map((item) => {
-      const employee = employeesById.get(item.employeeId);
-      const name = employee?.name || item.employeeName || "Dipendente";
-      return `
-        <div class="report-item">
-          <strong>${escapeHTML(name)}</strong>
-          <span class="hours">${Number(item.totalHours || 0).toFixed(1)} ore</span>
-          <p>${escapeHTML(slotsToRanges(item.slots || []))}</p>
-        </div>
-      `;
-    })
-    .join("");
-
-  target.innerHTML = `<div class="report-list">${rows}</div>`;
-}
-
-function renderMonthlyReport(items, employeesById, isAdmin, month) {
-  const target = $("monthlyReport");
-  if (!items.length) {
-    target.innerHTML = `<p class="muted">Nessun dato salvato per ${escapeHTML(month)}.</p>`;
-    return;
-  }
-
-  if (!isAdmin) {
-    const total = items.reduce((sum, item) => sum + Number(item.totalHours || 0), 0);
-    const euro = total * Number(state.currentUser.hourlyRate || 0);
-    target.innerHTML = `
-      <div class="report-item featured">
-        <strong>Totale mese</strong>
-        <span class="hours">${total.toFixed(1)} ore</span>
-        <p>Stima compenso: <strong>€ ${euro.toFixed(2)}</strong></p>
-      </div>
-    `;
-    return;
-  }
-
-  const totals = new Map();
-  items.forEach((item) => {
-    const id = item.employeeId;
-    const current = totals.get(id) || 0;
-    totals.set(id, current + Number(item.totalHours || 0));
+  filtered.forEach(item => {
+    if (!map.has(item.employeeId)) map.set(item.employeeId, { name: item.employeeName, hours: 0 });
+    map.get(item.employeeId).hours += item.totalHours || 0;
   });
 
-  const rows = [...totals.entries()]
-    .map(([id, hours]) => {
-      const employee = employeesById.get(id);
-      const name = employee?.name || "Dipendente";
-      const euro = hours * Number(employee?.hourlyRate || 0);
-      return { name, hours, euro };
-    })
+  els.adminMonthReport.innerHTML = "";
+
+  if (!map.size) {
+    els.adminMonthReport.innerHTML = `<div class="report-item"><strong>Nessun dato</strong><small>Non ci sono orari salvati per ${month}.</small></div>`;
+    return;
+  }
+
+  [...map.entries()]
+    .map(([id, v]) => ({ id, ...v }))
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((row) => `
-      <div class="report-item">
-        <strong>${escapeHTML(row.name)}</strong>
-        <span class="hours">${row.hours.toFixed(1)} ore</span>
-        <p>Stima compenso: <strong>€ ${row.euro.toFixed(2)}</strong></p>
-      </div>
-    `)
-    .join("");
-
-  target.innerHTML = `<div class="report-list">${rows}</div>`;
+    .forEach(row => {
+      const employee = state.employees.find(e => e.id === row.id);
+      const rate = Number(employee?.hourlyRate || 0);
+      const div = document.createElement("div");
+      div.className = "report-item";
+      div.innerHTML = `
+        <strong>${row.name}</strong>
+        <div class="big">${row.hours.toFixed(2)} ore</div>
+        <small>Compenso stimato: € ${(row.hours * rate).toFixed(2)}</small>
+      `;
+      els.adminMonthReport.appendChild(div);
+    });
 }
 
-function wireEvents() {
-  $("loginBtn").addEventListener("click", login);
-  $("loginPassword").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") login();
-  });
-  $("logoutBtn").addEventListener("click", logout);
-  $("addEmployeeBtn").addEventListener("click", addEmployee);
-  $("refreshBtn").addEventListener("click", refreshAll);
-  $("applyRangeBtn").addEventListener("click", applyRange);
-  $("saveDayBtn").addEventListener("click", saveSelectedDay);
+function slotsToRanges(slots) {
+  const sorted = slots.map(timeToMinutes).sort((a, b) => a - b);
+  if (!sorted.length) return [];
+  const ranges = [];
+  let start = sorted[0];
+  let prev = sorted[0];
 
-  $("selectedDate").addEventListener("change", loadSelectedShift);
-  $("selectedMonth").addEventListener("change", renderReports);
-  $("workUserSelect").addEventListener("change", loadSelectedShift);
-
-  $("selectAllBtn").addEventListener("click", () => {
-    state.selectedSlots = new Set(allSlotStarts());
-    renderSlots();
-    renderReports();
-  });
-
-  $("clearDayBtn").addEventListener("click", () => {
-    state.selectedSlots = new Set();
-    renderSlots();
-    renderReports();
-  });
-
-  $("employeesTable").addEventListener("click", (event) => {
-    const disableId = event.target?.dataset?.disableUser;
-    const reactivateId = event.target?.dataset?.reactivateUser;
-    if (disableId) setEmployeeActive(disableId, false);
-    if (reactivateId) setEmployeeActive(reactivateId, true);
-  });
-}
-
-async function init() {
-  buildTimeSelects();
-  buildSlotsGrid();
-  wireEvents();
-  try {
-    await ensureDefaultAdmin();
-    setMessage($("loginMessage"), "Firebase pronto. Puoi entrare.", "ok");
-  } catch (error) {
-    console.error(error);
-    setMessage($("loginMessage"), "Errore collegamento Firestore. Controlla database e regole.", "err");
+  for (let i = 1; i <= sorted.length; i++) {
+    const cur = sorted[i];
+    if (cur !== prev + 30) {
+      ranges.push({ start: minutesToTime(start), end: minutesToTime(prev + 30) });
+      start = cur;
+    }
+    prev = cur;
   }
+  return ranges;
 }
 
-init();
+function rangeHours(range) {
+  return (timeToMinutes(range.end) - timeToMinutes(range.start)) / 60;
+}
+
+function minutesToTime(minutes) {
+  const h = String(Math.floor(minutes / 60)).padStart(2, "0");
+  const m = String(minutes % 60).padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function timeToMinutes(time) {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function dateToYMD(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function setMsg(el, text, type = "") {
+  el.textContent = text;
+  el.className = `msg ${type}`.trim();
+}
