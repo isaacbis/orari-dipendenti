@@ -96,6 +96,38 @@
 
           <div class="card">
             <div class="section-head">
+              <h3>Inserimento vocale</h3>
+              <span class="chip chip-soft">Le tue ore</span>
+            </div>
+            <p class="helper">Puoi dettare una frase tipo: “Segnami le ore di oggi dalle 10 alle 21 e salvamele”. Se dici “salva” o “salvamele”, l'app prova a salvare direttamente.</p>
+
+            <div class="field">
+              <label for="personalVoiceDate">Data di riferimento</label>
+              <input id="personalVoiceDate" type="date" />
+            </div>
+
+            <div class="field">
+              <label for="personalVoiceText">Testo riconosciuto</label>
+              <textarea id="personalVoiceText" rows="4" placeholder="Esempio: oggi dalle 10 alle 21 e salvamele"></textarea>
+            </div>
+
+            <div class="action-row three-actions">
+              <button id="startPersonalVoiceBtn" class="btn btn-secondary" type="button">🎙️ Dettatura</button>
+              <button id="parsePersonalVoiceBtn" class="btn btn-light" type="button">Crea anteprima</button>
+              <button id="savePersonalVoiceBtn" class="btn btn-primary" type="button">Salva</button>
+            </div>
+            <p id="personalVoiceMsg" class="msg"></p>
+
+            <div id="personalVoicePreview" class="voice-preview top-gap">
+              <div class="summary-item">
+                <strong>Nessuna anteprima</strong>
+                <small>Frasi utili: “oggi 10-13 e 15-18”, “domani dalle 9 alle 14”, “dal 1 al 5 luglio 10-14”.</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
               <h3>Selezione rapida</h3>
               <button id="clearSlotsBtn" class="btn btn-light btn-sm">Svuota</button>
             </div>
@@ -184,6 +216,44 @@
               <h3>Dipendenti</h3>
             </div>
             <div id="employeeList" class="employee-list"></div>
+          </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Inserimento vocale ore dipendenti</h3>
+              <span class="chip chip-soft">Admin</span>
+            </div>
+            <p class="helper">Scegli il dipendente, premi il microfono e detta gli orari. Se dici “salva” o “salvamele”, l'app prova a salvare direttamente.</p>
+
+            <div class="field-grid single-mobile">
+              <div class="field">
+                <label for="voiceEmployee">Dipendente</label>
+                <select id="voiceEmployee"></select>
+              </div>
+              <div class="field">
+                <label for="voiceDate">Data di riferimento</label>
+                <input id="voiceDate" type="date" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="voiceText">Testo riconosciuto</label>
+              <textarea id="voiceText" rows="4" placeholder="Esempio: Marco 3 luglio dalle 10 alle 13 e dalle 15 alle 18"></textarea>
+            </div>
+
+            <div class="action-row three-actions">
+              <button id="startVoiceBtn" class="btn btn-secondary" type="button">🎙️ Dettatura</button>
+              <button id="parseVoiceBtn" class="btn btn-light" type="button">Crea anteprima</button>
+              <button id="saveVoiceBtn" class="btn btn-primary" type="button">Conferma e salva</button>
+            </div>
+            <p id="voiceMsg" class="msg"></p>
+
+            <div id="voicePreview" class="voice-preview top-gap">
+              <div class="summary-item">
+                <strong>Nessuna anteprima</strong>
+                <small>Frasi utili: “Giulia oggi 10-13 e 15-18”, “Marco domani dalle 9 alle 14”, “Sara dal 1 al 5 luglio 10-14”.</small>
+              </div>
+            </div>
           </div>
 
           <div class="card">
