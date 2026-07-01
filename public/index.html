@@ -126,14 +126,23 @@
             </div>
           </div>
 
-          <div class="card">
-            <div class="section-head">
-              <h3>Slot rapidi</h3>
-              <button id="clearSlotsBtn" class="btn btn-light btn-sm">Svuota</button>
+          <details class="card collapsible-card" id="quickSlotsBox">
+            <summary class="collapsible-summary">
+              <div>
+                <h3>Selezione rapida</h3>
+                <small>Apri gli orari ogni mezz'ora</small>
+              </div>
+              <span class="collapse-icon" aria-hidden="true">⌄</span>
+            </summary>
+
+            <div class="collapsible-content">
+              <div class="quick-slots-toolbar">
+                <p class="helper no-margin">Tocca gli orari per modificarli manualmente.</p>
+                <button id="clearSlotsBtn" class="btn btn-light btn-sm" type="button">Svuota</button>
+              </div>
+              <div id="slotGrid" class="slot-grid"></div>
             </div>
-            <p class="helper">Tocca gli slot per modificarli manualmente.</p>
-            <div id="slotGrid" class="slot-grid"></div>
-          </div>
+          </details>
 
           <div class="card">
             <div class="section-head">

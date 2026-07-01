@@ -29,8 +29,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 try { getAnalytics(app); } catch {}
 const db = getFirestore(app);
-let adminVoiceRecognition = null;
-let personalVoiceRecognition = null;
 
 const state = {
   currentUser: null,
@@ -38,8 +36,8 @@ const state = {
   selectedSlots: new Set(),
   slots: generateSlots(),
   employeeMonthReport: null,
-  adminVoicePreviewRows: [],
-  personalVoicePreviewRows: [],
+  personalVoiceDraft: null,
+  adminVoiceDraft: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -64,13 +62,6 @@ const els = {
   slotGrid: $("slotGrid"),
   clearSlotsBtn: $("clearSlotsBtn"),
   selectedRanges: $("selectedRanges"),
-  personalVoiceDate: $("personalVoiceDate"),
-  personalVoiceText: $("personalVoiceText"),
-  startPersonalVoiceBtn: $("startPersonalVoiceBtn"),
-  parsePersonalVoiceBtn: $("parsePersonalVoiceBtn"),
-  savePersonalVoiceBtn: $("savePersonalVoiceBtn"),
-  personalVoiceMsg: $("personalVoiceMsg"),
-  personalVoicePreview: $("personalVoicePreview"),
   saveDayBtn: $("saveDayBtn"),
   saveMsg: $("saveMsg"),
   reportMonth: $("reportMonth"),
@@ -100,6 +91,13 @@ const els = {
   employeePdfMsg: $("employeePdfMsg"),
   employeeMonthSummary: $("employeeMonthSummary"),
   employeeMonthTable: $("employeeMonthTable"),
+  personalVoiceDate: $("personalVoiceDate"),
+  personalVoiceText: $("personalVoiceText"),
+  startPersonalVoiceBtn: $("startPersonalVoiceBtn"),
+  parsePersonalVoiceBtn: $("parsePersonalVoiceBtn"),
+  savePersonalVoiceBtn: $("savePersonalVoiceBtn"),
+  personalVoiceMsg: $("personalVoiceMsg"),
+  personalVoicePreview: $("personalVoicePreview"),
   voiceEmployee: $("voiceEmployee"),
   voiceDate: $("voiceDate"),
   voiceText: $("voiceText"),
@@ -125,18 +123,10 @@ function bindEvents() {
     if (event.key === "Enter") handleLogin();
   });
   els.logoutBtn.addEventListener("click", logout);
-  els.selectedDate.addEventListener("change", () => {
-    els.personalVoiceDate.value = els.selectedDate.value;
-    loadSelectedDay();
-  });
+  els.selectedDate.addEventListener("change", loadSelectedDay);
   els.addRangeBtn.addEventListener("click", addRangeFromInputs);
   els.clearSlotsBtn.addEventListener("click", clearSelection);
   els.saveDayBtn.addEventListener("click", saveSelectedDay);
-  els.personalVoiceDate.addEventListener("change", clearPersonalVoicePreview);
-  els.personalVoiceText.addEventListener("input", clearPersonalVoicePreview);
-  els.startPersonalVoiceBtn.addEventListener("click", startPersonalVoiceDictation);
-  els.parsePersonalVoiceBtn.addEventListener("click", createPersonalVoicePreview);
-  els.savePersonalVoiceBtn.addEventListener("click", savePersonalVoicePreview);
   els.loadMyReportBtn.addEventListener("click", loadMyReports);
   els.createEmployeeBtn.addEventListener("click", createEmployee);
   els.loadAdminDayBtn.addEventListener("click", loadAdminDayReport);
@@ -145,12 +135,19 @@ function bindEvents() {
   els.downloadEmployeePdfBtn.addEventListener("click", downloadAdminEmployeeMonthPdf);
   els.adminReportEmployee.addEventListener("change", clearEmployeeMonthReport);
   els.adminReportMonth.addEventListener("change", clearEmployeeMonthReport);
-  els.voiceEmployee.addEventListener("change", clearAdminVoicePreview);
-  els.voiceDate.addEventListener("change", clearAdminVoicePreview);
-  els.voiceText.addEventListener("input", clearAdminVoicePreview);
-  els.startVoiceBtn.addEventListener("click", startAdminVoiceDictation);
-  els.parseVoiceBtn.addEventListener("click", createAdminVoicePreview);
-  els.saveVoiceBtn.addEventListener("click", saveAdminVoicePreview);
+
+  els.startPersonalVoiceBtn.addEventListener("click", () => startVoiceDictation(els.personalVoiceText, els.personalVoiceMsg, parsePersonalVoice));
+  els.parsePersonalVoiceBtn.addEventListener("click", parsePersonalVoice);
+  els.savePersonalVoiceBtn.addEventListener("click", savePersonalVoiceDraft);
+  els.personalVoiceText.addEventListener("input", () => setMsg(els.personalVoiceMsg, ""));
+
+  els.startVoiceBtn.addEventListener("click", () => startVoiceDictation(els.voiceText, els.voiceMsg, parseAdminVoice));
+  els.parseVoiceBtn.addEventListener("click", parseAdminVoice);
+  els.saveVoiceBtn.addEventListener("click", saveAdminVoiceDraft);
+  els.voiceText.addEventListener("input", () => setMsg(els.voiceMsg, ""));
+  els.voiceEmployee.addEventListener("change", () => { state.adminVoiceDraft = null; renderVoiceEmpty(els.voicePreview, "Nessuna anteprima", "Detta o scrivi gli orari del dipendente scelto."); });
+  els.voiceDate.addEventListener("change", () => { state.adminVoiceDraft = null; });
+  els.personalVoiceDate.addEventListener("change", () => { state.personalVoiceDraft = null; });
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => activateTab(btn.dataset.tab, btn));
@@ -218,12 +215,10 @@ function logout() {
   state.currentUser = null;
   state.selectedSlots = new Set();
   state.employeeMonthReport = null;
-  state.adminVoicePreviewRows = [];
-  state.personalVoicePreviewRows = [];
+  state.personalVoiceDraft = null;
+  state.adminVoiceDraft = null;
   renderSelectedState();
   clearEmployeeMonthReport();
-  clearAdminVoicePreview();
-  clearPersonalVoicePreview();
   els.appView.classList.add("hidden");
   els.loginView.classList.remove("hidden");
   els.loginUsername.value = "";
@@ -388,6 +383,341 @@ async function saveSelectedDay() {
   await loadMyReports();
 }
 
+
+async function saveWorkSessionForEmployee(employee, date, slots) {
+  const cleanSlots = [...new Set(slots)].sort();
+  const ranges = slotsToRanges(cleanSlots);
+  const totalHours = cleanSlots.length * 0.5;
+
+  if (!employee?.id || !date) throw new Error("Dipendente o data non validi.");
+  if (!cleanSlots.length) throw new Error("Nessun orario riconosciuto.");
+
+  const ref = doc(db, "workSessions", `${employee.id}_${date}`);
+  await setDoc(ref, {
+    employeeId: employee.id,
+    employeeName: employee.name || employee.username || "Dipendente",
+    date,
+    slots: cleanSlots,
+    ranges,
+    totalHours,
+    updatedAt: serverTimestamp()
+  });
+
+  return { employee, date, slots: cleanSlots, ranges, totalHours };
+}
+
+function parsePersonalVoice() {
+  if (!state.currentUser) return;
+  const text = els.personalVoiceText.value.trim();
+  const baseDate = els.personalVoiceDate.value || els.selectedDate.value || dateToYMD(new Date());
+
+  try {
+    const draft = buildVoiceDraft({
+      text,
+      baseDate,
+      employee: state.currentUser,
+      allowEmployeeFromText: false
+    });
+
+    state.personalVoiceDraft = draft;
+    renderVoicePreview(els.personalVoicePreview, draft);
+    setMsg(els.personalVoiceMsg, draft.shouldSave ? "Orari riconosciuti. Hai detto anche salva: puoi confermare o verranno salvati dalla dettatura." : "Anteprima pronta. Controlla e salva.", "success");
+    return draft;
+  } catch (error) {
+    state.personalVoiceDraft = null;
+    renderVoiceEmpty(els.personalVoicePreview, "Nessuna anteprima", "Non ho riconosciuto bene gli orari.");
+    setMsg(els.personalVoiceMsg, error.message, "error");
+    return null;
+  }
+}
+
+async function savePersonalVoiceDraft() {
+  if (!state.currentUser) return;
+  const draft = state.personalVoiceDraft || parsePersonalVoice();
+  if (!draft) return;
+
+  try {
+    await saveVoiceDraft(draft);
+    const last = draft.days[draft.days.length - 1];
+    els.selectedDate.value = last.date;
+    els.reportMonth.value = last.date.slice(0, 7);
+    state.selectedSlots = new Set(last.slots);
+    renderSelectedState();
+    await loadSelectedDay();
+    await loadMyReports();
+    if (state.currentUser.role === "admin") {
+      await loadAdminDayReport();
+      await loadAdminMonthReport();
+      await loadAdminEmployeeMonthReport({ silent: true });
+    }
+    setMsg(els.personalVoiceMsg, `Salvato: ${draft.days.length} ${draft.days.length === 1 ? "giorno" : "giorni"}.`, "success");
+  } catch (error) {
+    setMsg(els.personalVoiceMsg, error.message, "error");
+  }
+}
+
+function parseAdminVoice() {
+  if (!state.currentUser || state.currentUser.role !== "admin") return null;
+  const selectedEmployee = state.employees.find(emp => emp.id === els.voiceEmployee.value);
+  const text = els.voiceText.value.trim();
+  const baseDate = els.voiceDate.value || dateToYMD(new Date());
+
+  try {
+    const draft = buildVoiceDraft({
+      text,
+      baseDate,
+      employee: selectedEmployee,
+      employees: state.employees.filter(emp => emp.role !== "admin" && emp.active !== false),
+      allowEmployeeFromText: true
+    });
+
+    state.adminVoiceDraft = draft;
+    if (draft.employee?.id && draft.employee.id !== els.voiceEmployee.value) {
+      els.voiceEmployee.value = draft.employee.id;
+    }
+    renderVoicePreview(els.voicePreview, draft);
+    setMsg(els.voiceMsg, draft.shouldSave ? "Orari riconosciuti. Hai detto anche salva." : "Anteprima pronta. Controlla e salva.", "success");
+    return draft;
+  } catch (error) {
+    state.adminVoiceDraft = null;
+    renderVoiceEmpty(els.voicePreview, "Nessuna anteprima", "Non ho riconosciuto bene dipendente, data o orari.");
+    setMsg(els.voiceMsg, error.message, "error");
+    return null;
+  }
+}
+
+async function saveAdminVoiceDraft() {
+  if (!state.currentUser || state.currentUser.role !== "admin") return;
+  const draft = state.adminVoiceDraft || parseAdminVoice();
+  if (!draft) return;
+
+  try {
+    await saveVoiceDraft(draft);
+    const first = draft.days[0];
+    els.adminDay.value = first.date;
+    els.adminMonth.value = first.date.slice(0, 7);
+    els.adminReportMonth.value = first.date.slice(0, 7);
+    els.adminReportEmployee.value = draft.employee.id;
+    await loadAdminDayReport();
+    await loadAdminMonthReport();
+    await loadAdminEmployeeMonthReport({ silent: true });
+    setMsg(els.voiceMsg, `Salvato per ${draft.employee.name || "dipendente"}: ${draft.days.length} ${draft.days.length === 1 ? "giorno" : "giorni"}.`, "success");
+  } catch (error) {
+    setMsg(els.voiceMsg, error.message, "error");
+  }
+}
+
+async function saveVoiceDraft(draft) {
+  if (!draft?.employee || !draft.days?.length) throw new Error("Prima crea un'anteprima valida.");
+
+  for (const day of draft.days) {
+    await saveWorkSessionForEmployee(draft.employee, day.date, day.slots);
+  }
+
+  return draft;
+}
+
+function buildVoiceDraft({ text, baseDate, employee, employees = [], allowEmployeeFromText = false }) {
+  if (!text) throw new Error("Detta o scrivi una frase con gli orari.");
+
+  const normalized = normalizeText(text);
+  const detectedEmployee = allowEmployeeFromText ? findEmployeeInText(normalized, employees) : null;
+  const finalEmployee = detectedEmployee || employee;
+  if (!finalEmployee?.id) throw new Error("Seleziona un dipendente.");
+
+  const dates = parseDatesFromText(normalized, baseDate);
+  const ranges = parseTimeRanges(normalized);
+  if (!ranges.length) throw new Error("Non ho trovato fasce orarie. Esempio: oggi dalle 10 alle 21.");
+
+  const slots = rangesToSlots(ranges);
+  if (!slots.length) throw new Error("Gli orari devono essere validi e a mezz'ora, per esempio 10:00 o 10:30.");
+
+  const days = dates.map(date => ({ date, slots, ranges, totalHours: slots.length * 0.5 }));
+  const shouldSave = /\b(salva|salvami|salvamele|salvamelo|conferma|registra|registrami)\b/.test(normalized);
+
+  return {
+    employee: finalEmployee,
+    days,
+    ranges,
+    shouldSave,
+    originalText: text
+  };
+}
+
+function startVoiceDictation(textarea, msgEl, afterResult) {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) {
+    setMsg(msgEl, "Dettatura non supportata su questo browser. Puoi scrivere la frase a mano.", "error");
+    return;
+  }
+
+  const recognition = new Recognition();
+  recognition.lang = "it-IT";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => setMsg(msgEl, "Sto ascoltando...", "success");
+  recognition.onerror = () => setMsg(msgEl, "Non sono riuscito a capire il vocale. Riprova o scrivi la frase.", "error");
+  recognition.onresult = async (event) => {
+    const transcript = event.results?.[0]?.[0]?.transcript || "";
+    textarea.value = transcript;
+    setMsg(msgEl, `Ho capito: “${transcript}”`, "success");
+    const draft = afterResult();
+    if (draft?.shouldSave) {
+      if (textarea === els.personalVoiceText) await savePersonalVoiceDraft();
+      else await saveAdminVoiceDraft();
+    }
+  };
+
+  recognition.start();
+}
+
+function renderVoicePreview(container, draft) {
+  const totalHours = draft.days.reduce((sum, day) => sum + day.totalHours, 0);
+  const dayText = draft.days.length === 1 ? formatDateIT(draft.days[0].date) : `${formatDateIT(draft.days[0].date)} - ${formatDateIT(draft.days[draft.days.length - 1].date)}`;
+  container.innerHTML = `
+    <div class="summary-item voice-ready">
+      <strong>${escapeHTML(draft.employee.name || "Dipendente")}</strong>
+      <div class="big">${escapeHTML(formatRanges({ ranges: draft.ranges }))}</div>
+      <small>${escapeHTML(dayText)} • ${totalHours.toFixed(2)} ore totali${draft.shouldSave ? " • salvataggio richiesto" : ""}</small>
+    </div>
+  `;
+}
+
+function renderVoiceEmpty(container, title, subtitle) {
+  container.innerHTML = `
+    <div class="summary-item">
+      <strong>${escapeHTML(title)}</strong>
+      <small>${escapeHTML(subtitle)}</small>
+    </div>
+  `;
+}
+
+function normalizeText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[–—]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findEmployeeInText(normalizedText, employees) {
+  return employees.find(emp => {
+    const name = normalizeText(emp.name || "");
+    const username = normalizeText(emp.username || "");
+    if (name && normalizedText.includes(name)) return true;
+    if (username && normalizedText.includes(username)) return true;
+    const firstName = name.split(" ")[0];
+    return firstName.length >= 3 && normalizedText.includes(firstName);
+  }) || null;
+}
+
+function parseDatesFromText(text, baseDate) {
+  const base = new Date(`${baseDate}T12:00:00`);
+  const monthNames = {
+    gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
+    luglio: 7, agosto: 8, settembre: 9, ottobre: 10, novembre: 11, dicembre: 12
+  };
+
+  const rangeMatch = text.match(/\bdal\s+(\d{1,2})(?:\s+\w+)?\s+al\s+(\d{1,2})\s*(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)?(?:\s+(\d{4}))?/);
+  if (rangeMatch) {
+    const startDay = Number(rangeMatch[1]);
+    const endDay = Number(rangeMatch[2]);
+    const month = rangeMatch[3] ? monthNames[rangeMatch[3]] : base.getMonth() + 1;
+    const year = rangeMatch[4] ? Number(rangeMatch[4]) : base.getFullYear();
+    if (endDay < startDay) throw new Error("Intervallo date non valido.");
+    const dates = [];
+    for (let day = startDay; day <= endDay; day++) {
+      dates.push(dateToYMD(new Date(year, month - 1, day)));
+    }
+    return dates;
+  }
+
+  if (/\bdomani\b/.test(text)) return [dateToYMD(addDays(base, 1))];
+  if (/\bieri\b/.test(text)) return [dateToYMD(addDays(base, -1))];
+  if (/\boggi\b/.test(text)) return [dateToYMD(base)];
+
+  const numericDate = text.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+  if (numericDate) {
+    const day = Number(numericDate[1]);
+    const month = Number(numericDate[2]);
+    let year = numericDate[3] ? Number(numericDate[3]) : base.getFullYear();
+    if (year < 100) year += 2000;
+    return [dateToYMD(new Date(year, month - 1, day))];
+  }
+
+  const textDate = text.match(/\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+(\d{4}))?\b/);
+  if (textDate) {
+    const day = Number(textDate[1]);
+    const month = monthNames[textDate[2]];
+    const year = textDate[3] ? Number(textDate[3]) : base.getFullYear();
+    return [dateToYMD(new Date(year, month - 1, day))];
+  }
+
+  return [dateToYMD(base)];
+}
+
+function parseTimeRanges(text) {
+  const ranges = [];
+  const rangeRegex = /(?:dalle?|da)?\s*(\d{1,2})(?:[:.,](\d{2}))?\s*(?:alle?|a|-|fino alle?|fino a)\s*(\d{1,2})(?:[:.,](\d{2}))?/g;
+  let match;
+
+  while ((match = rangeRegex.exec(text)) !== null) {
+    const start = buildTime(match[1], match[2]);
+    const end = buildTime(match[3], match[4]);
+    if (start !== null && end !== null && end > start) {
+      ranges.push({ start: minutesToTime(start), end: minutesToTime(end) });
+    }
+  }
+
+  return mergeRanges(ranges);
+}
+
+function buildTime(hourText, minuteText = "0") {
+  let hour = Number(hourText);
+  let minute = Number(minuteText || 0);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (hour < 0 || hour > 24 || minute < 0 || minute > 59) return null;
+  if (hour === 24 && minute !== 0) return null;
+  if (![0, 30].includes(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function rangesToSlots(ranges) {
+  const slots = new Set();
+  ranges.forEach(range => {
+    const start = timeToMinutes(range.start);
+    const end = timeToMinutes(range.end);
+    for (let m = start; m < end; m += 30) {
+      slots.add(minutesToTime(m));
+    }
+  });
+  return [...slots].sort();
+}
+
+function mergeRanges(ranges) {
+  const sorted = ranges
+    .map(range => ({ start: timeToMinutes(range.start), end: timeToMinutes(range.end) }))
+    .sort((a, b) => a.start - b.start);
+
+  const merged = [];
+  sorted.forEach(range => {
+    const last = merged[merged.length - 1];
+    if (!last || range.start > last.end) merged.push({ ...range });
+    else last.end = Math.max(last.end, range.end);
+  });
+
+  return merged.map(range => ({ start: minutesToTime(range.start), end: minutesToTime(range.end) }));
+}
+
+function addDays(date, days) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
 async function loadMyReports() {
   if (!state.currentUser) return;
   const snap = await getDocs(query(collection(db, "workSessions"), where("employeeId", "==", state.currentUser.id)));
@@ -483,7 +813,6 @@ async function loadEmployees() {
   populateAdminEmployeeSelect();
 }
 
-
 function populateAdminEmployeeSelect() {
   const previousReport = els.adminReportEmployee.value;
   const previousVoice = els.voiceEmployee.value;
@@ -493,14 +822,14 @@ function populateAdminEmployeeSelect() {
   fillEmployeeSelect(els.voiceEmployee, employees, previousVoice);
 }
 
-function fillEmployeeSelect(select, employees, previousValue = "") {
-  select.innerHTML = "";
+function fillEmployeeSelect(selectEl, employees, previousValue) {
+  selectEl.innerHTML = "";
 
   if (!employees.length) {
     const option = document.createElement("option");
     option.value = "";
     option.textContent = "Nessun dipendente disponibile";
-    select.appendChild(option);
+    selectEl.appendChild(option);
     return;
   }
 
@@ -508,625 +837,11 @@ function fillEmployeeSelect(select, employees, previousValue = "") {
     const option = document.createElement("option");
     option.value = emp.id;
     option.textContent = emp.name || emp.username || "Dipendente";
-    select.appendChild(option);
+    selectEl.appendChild(option);
   });
 
   const stillExists = employees.some(emp => emp.id === previousValue);
-  select.value = stillExists ? previousValue : employees[0].id;
-}
-
-
-async function startPersonalVoiceDictation() {
-  if (!state.currentUser) return;
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    setMsg(els.personalVoiceMsg, "Dettatura non supportata da questo browser. Puoi comunque scrivere la frase a mano e premere Crea anteprima.", "error");
-    return;
-  }
-
-  if (personalVoiceRecognition) {
-    personalVoiceRecognition.stop();
-    personalVoiceRecognition = null;
-    els.startPersonalVoiceBtn.textContent = "🎙️ Dettatura";
-    return;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = "it-IT";
-  recognition.interimResults = false;
-  recognition.continuous = false;
-  recognition.maxAlternatives = 1;
-
-  personalVoiceRecognition = recognition;
-  els.startPersonalVoiceBtn.textContent = "Sto ascoltando...";
-  setMsg(els.personalVoiceMsg, "Parla ora. Esempio: “Segnami le ore di oggi dalle 10 alle 21 e salvamele”.", "success");
-
-  recognition.onresult = (event) => {
-    const transcript = Array.from(event.results)
-      .map(result => result[0]?.transcript || "")
-      .join(" ")
-      .trim();
-
-    if (transcript) {
-      els.personalVoiceText.value = els.personalVoiceText.value.trim()
-        ? `${els.personalVoiceText.value.trim()} ${transcript}`
-        : transcript;
-      clearPersonalVoicePreview();
-      setMsg(els.personalVoiceMsg, `Testo ricevuto: ${transcript}`, "success");
-
-      if (hasVoiceSaveCommand(transcript)) {
-        setTimeout(async () => {
-          createPersonalVoicePreview();
-          await savePersonalVoicePreview({ skipConfirm: true });
-        }, 250);
-      }
-    }
-  };
-
-  recognition.onerror = () => {
-    setMsg(els.personalVoiceMsg, "Non sono riuscito a leggere il vocale. Riprova oppure scrivi la frase a mano.", "error");
-  };
-
-  recognition.onend = () => {
-    personalVoiceRecognition = null;
-    els.startPersonalVoiceBtn.textContent = "🎙️ Dettatura";
-  };
-
-  recognition.start();
-}
-
-function createPersonalVoicePreview() {
-  if (!state.currentUser) return;
-
-  try {
-    const rows = parsePersonalVoiceWorkRows(els.personalVoiceText.value);
-    state.personalVoicePreviewRows = rows;
-    renderPersonalVoicePreview(rows);
-    setMsg(els.personalVoiceMsg, "Anteprima creata. Controlla bene prima di salvare.", "success");
-  } catch (error) {
-    state.personalVoicePreviewRows = [];
-    renderPersonalVoicePreview([]);
-    setMsg(els.personalVoiceMsg, error.message || "Non sono riuscito a capire la frase.", "error");
-  }
-}
-
-async function savePersonalVoicePreview(options = {}) {
-  if (!state.currentUser) return;
-
-  if (!state.personalVoicePreviewRows.length) {
-    createPersonalVoicePreview();
-  }
-
-  const rows = state.personalVoicePreviewRows;
-  if (!rows.length) return;
-
-  if (!options.skipConfirm) {
-    const ok = confirm(`Salvare ${rows.length} giornata/e? Eventuali orari già presenti per gli stessi giorni verranno sostituiti.`);
-    if (!ok) return;
-  }
-
-  for (const row of rows) {
-    const ref = doc(db, "workSessions", `${state.currentUser.id}_${row.date}`);
-    await setDoc(ref, {
-      employeeId: state.currentUser.id,
-      employeeName: state.currentUser.name || state.currentUser.username || "Dipendente",
-      date: row.date,
-      slots: row.slots,
-      ranges: row.ranges,
-      totalHours: row.totalHours,
-      source: "user-voice",
-      insertedBy: state.currentUser.id,
-      updatedAt: serverTimestamp()
-    });
-  }
-
-  const firstDate = rows[0].date;
-  els.selectedDate.value = firstDate;
-  els.personalVoiceDate.value = firstDate;
-  state.selectedSlots = new Set(rows[0].slots);
-  renderSelectedState();
-
-  setMsg(els.personalVoiceMsg, "Orari salvati correttamente.", "success");
-  await loadMyReports();
-  await loadSelectedDay();
-
-  if (state.currentUser.role === "admin") {
-    await loadAdminDayReport();
-    await loadAdminMonthReport();
-    await loadAdminEmployeeMonthReport({ silent: true });
-  }
-}
-
-function renderPersonalVoicePreview(rows) {
-  if (!rows.length) {
-    els.personalVoicePreview.innerHTML = `
-      <div class="summary-item">
-        <strong>Nessuna anteprima</strong>
-        <small>Frasi utili: “oggi 10-13 e 15-18”, “domani dalle 9 alle 14”, “dal 1 al 5 luglio 10-14”.</small>
-      </div>
-    `;
-    return;
-  }
-
-  const totalHours = rows.reduce((sum, row) => sum + row.totalHours, 0);
-  els.personalVoicePreview.innerHTML = `
-    <div class="summary-item">
-      <strong>${escapeHTML(state.currentUser.name || state.currentUser.username || "Dipendente")}</strong>
-      <div class="big">${rows.length} giornata/e • ${totalHours.toFixed(2)} ore totali</div>
-      <small>Premendo Salva, questi orari sostituiscono quelli già presenti negli stessi giorni.</small>
-    </div>
-    ${rows.map(row => `
-      <div class="summary-item worked-preview">
-        <strong>${escapeHTML(formatDateIT(row.date))} • ${escapeHTML(formatWeekdayIT(row.date))}</strong>
-        <div class="big">${escapeHTML(row.ranges.map(r => `${r.start} - ${r.end}`).join(" / "))}</div>
-        <small>Totale: ${row.totalHours.toFixed(2)} ore</small>
-      </div>
-    `).join("")}
-  `;
-}
-
-function clearPersonalVoicePreview() {
-  state.personalVoicePreviewRows = [];
-  if (!els.personalVoicePreview) return;
-  renderPersonalVoicePreview([]);
-  if (els.personalVoiceMsg) setMsg(els.personalVoiceMsg, "");
-}
-
-function parsePersonalVoiceWorkRows(rawText) {
-  const raw = String(rawText || "").trim();
-  if (!raw) throw new Error("Detta o scrivi prima una frase con data e orari.");
-
-  const fallbackDate = els.personalVoiceDate.value || els.selectedDate.value || dateToYMD(new Date());
-  const dates = parseVoiceDates(raw, fallbackDate);
-  const parsedRanges = parseVoiceRanges(raw);
-  if (!parsedRanges.length) {
-    throw new Error("Non ho trovato gli orari. Usa frasi tipo: “10-13”, “dalle 10 alle 13”, “10:30-13:00”.");
-  }
-
-  const slots = rangesToSlots(parsedRanges);
-  const ranges = slotsToRanges(slots);
-  const totalHours = ranges.reduce((sum, range) => sum + rangeHours(range), 0);
-  if (totalHours <= 0) throw new Error("Gli orari non sono validi.");
-
-  return dates.map(date => ({
-    date,
-    slots,
-    ranges,
-    totalHours
-  }));
-}
-
-function hasVoiceSaveCommand(rawText) {
-  const text = normalizeVoiceText(rawText);
-  return /\b(salva|salvami|salvamelo|salvamela|salvamele|salvali|registrami|registra)\b/.test(text);
-}
-
-async function startAdminVoiceDictation() {
-  if (!state.currentUser || state.currentUser.role !== "admin") return;
-
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    setMsg(els.voiceMsg, "Dettatura non supportata da questo browser. Puoi comunque scrivere la frase a mano e premere Crea anteprima.", "error");
-    return;
-  }
-
-  if (adminVoiceRecognition) {
-    adminVoiceRecognition.stop();
-    adminVoiceRecognition = null;
-    els.startVoiceBtn.textContent = "🎙️ Dettatura";
-    return;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = "it-IT";
-  recognition.interimResults = false;
-  recognition.continuous = false;
-  recognition.maxAlternatives = 1;
-
-  adminVoiceRecognition = recognition;
-  els.startVoiceBtn.textContent = "Sto ascoltando...";
-  setMsg(els.voiceMsg, "Parla ora. Esempio: “Marco oggi dalle 10 alle 13 e dalle 15 alle 18”.", "success");
-
-  recognition.onresult = (event) => {
-    const transcript = Array.from(event.results)
-      .map(result => result[0]?.transcript || "")
-      .join(" ")
-      .trim();
-
-    if (transcript) {
-      els.voiceText.value = els.voiceText.value.trim()
-        ? `${els.voiceText.value.trim()} ${transcript}`
-        : transcript;
-      clearAdminVoicePreview();
-      setMsg(els.voiceMsg, `Testo ricevuto: ${transcript}`, "success");
-      if (hasVoiceSaveCommand(transcript)) {
-        setTimeout(async () => {
-          createAdminVoicePreview();
-          await saveAdminVoicePreview({ skipConfirm: true });
-        }, 250);
-      }
-    }
-  };
-
-  recognition.onerror = () => {
-    setMsg(els.voiceMsg, "Non sono riuscito a leggere il vocale. Riprova oppure scrivi la frase a mano.", "error");
-  };
-
-  recognition.onend = () => {
-    adminVoiceRecognition = null;
-    els.startVoiceBtn.textContent = "🎙️ Dettatura";
-  };
-
-  recognition.start();
-}
-
-function createAdminVoicePreview() {
-  if (!state.currentUser || state.currentUser.role !== "admin") return;
-
-  try {
-    const rows = parseVoiceWorkRows(els.voiceText.value);
-    state.adminVoicePreviewRows = rows;
-    renderAdminVoicePreview(rows);
-    setMsg(els.voiceMsg, "Anteprima creata. Controlla bene prima di salvare.", "success");
-  } catch (error) {
-    state.adminVoicePreviewRows = [];
-    renderAdminVoicePreview([]);
-    setMsg(els.voiceMsg, error.message || "Non sono riuscito a capire la frase.", "error");
-  }
-}
-
-async function saveAdminVoicePreview(options = {}) {
-  if (!state.currentUser || state.currentUser.role !== "admin") return;
-
-  if (!state.adminVoicePreviewRows.length) {
-    createAdminVoicePreview();
-  }
-
-  const rows = state.adminVoicePreviewRows;
-  if (!rows.length) return;
-
-  if (!options.skipConfirm) {
-    const ok = confirm(`Salvare ${rows.length} giornata/e? Eventuali orari già presenti per gli stessi giorni verranno sostituiti.`);
-    if (!ok) return;
-  }
-
-  for (const row of rows) {
-    const ref = doc(db, "workSessions", `${row.employee.id}_${row.date}`);
-    await setDoc(ref, {
-      employeeId: row.employee.id,
-      employeeName: row.employee.name || row.employee.username || "Dipendente",
-      date: row.date,
-      slots: row.slots,
-      ranges: row.ranges,
-      totalHours: row.totalHours,
-      source: "admin-voice",
-      insertedBy: state.currentUser.id,
-      updatedAt: serverTimestamp()
-    });
-  }
-
-  setMsg(els.voiceMsg, "Orari salvati correttamente.", "success");
-  await loadAdminDayReport();
-  await loadAdminMonthReport();
-
-  if (els.adminReportEmployee.value === rows[0].employee.id && els.adminReportMonth.value === rows[0].date.slice(0, 7)) {
-    await loadAdminEmployeeMonthReport({ silent: true });
-  }
-}
-
-function renderAdminVoicePreview(rows) {
-  if (!rows.length) {
-    els.voicePreview.innerHTML = `
-      <div class="summary-item">
-        <strong>Nessuna anteprima</strong>
-        <small>Frasi utili: “Giulia oggi 10-13 e 15-18”, “Marco domani dalle 9 alle 14”, “Sara dal 1 al 5 luglio 10-14”.</small>
-      </div>
-    `;
-    return;
-  }
-
-  const totalHours = rows.reduce((sum, row) => sum + row.totalHours, 0);
-  els.voicePreview.innerHTML = `
-    <div class="summary-item">
-      <strong>${escapeHTML(rows[0].employee.name || rows[0].employee.username || "Dipendente")}</strong>
-      <div class="big">${rows.length} giornata/e • ${totalHours.toFixed(2)} ore totali</div>
-      <small>Premendo Conferma e salva, questi orari sostituiscono quelli già presenti negli stessi giorni.</small>
-    </div>
-    ${rows.map(row => `
-      <div class="summary-item worked-preview">
-        <strong>${escapeHTML(formatDateIT(row.date))} • ${escapeHTML(formatWeekdayIT(row.date))}</strong>
-        <div class="big">${escapeHTML(row.ranges.map(r => `${r.start} - ${r.end}`).join(" / "))}</div>
-        <small>Totale: ${row.totalHours.toFixed(2)} ore</small>
-      </div>
-    `).join("")}
-  `;
-}
-
-function clearAdminVoicePreview() {
-  state.adminVoicePreviewRows = [];
-  if (!els.voicePreview) return;
-  renderAdminVoicePreview([]);
-  if (els.voiceMsg) setMsg(els.voiceMsg, "");
-}
-
-function parseVoiceWorkRows(rawText) {
-  const raw = String(rawText || "").trim();
-  if (!raw) throw new Error("Detta o scrivi prima una frase con dipendente, data e orari.");
-
-  const employees = state.employees.filter(emp => emp.role !== "admin" && emp.active !== false);
-  if (!employees.length) throw new Error("Prima crea almeno un dipendente.");
-
-  const employee = detectEmployeeFromText(raw, employees) || employees.find(emp => emp.id === els.voiceEmployee.value);
-  if (!employee) throw new Error("Non ho trovato il dipendente. Sceglilo dalla tendina oppure pronuncia il nome.");
-
-  const dates = parseVoiceDates(raw, els.voiceDate.value || dateToYMD(new Date()));
-  const parsedRanges = parseVoiceRanges(raw);
-  if (!parsedRanges.length) {
-    throw new Error("Non ho trovato gli orari. Usa frasi tipo: “10-13”, “dalle 10 alle 13”, “10:30-13:00”.");
-  }
-
-  const slots = rangesToSlots(parsedRanges);
-  const ranges = slotsToRanges(slots);
-  const totalHours = ranges.reduce((sum, range) => sum + rangeHours(range), 0);
-  if (totalHours <= 0) throw new Error("Gli orari non sono validi.");
-
-  return dates.map(date => ({
-    employee,
-    date,
-    slots,
-    ranges,
-    totalHours
-  }));
-}
-
-function detectEmployeeFromText(rawText, employees) {
-  const text = normalizeForMatch(rawText);
-  const matches = employees
-    .map(emp => {
-      const name = normalizeForMatch(emp.name || "");
-      const username = normalizeForMatch(emp.username || "");
-      const score = [name, username]
-        .filter(Boolean)
-        .filter(value => text.includes(value))
-        .reduce((max, value) => Math.max(max, value.length), 0);
-      return { emp, score };
-    })
-    .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-
-  return matches[0]?.emp || null;
-}
-
-function parseVoiceDates(rawText, fallbackDate) {
-  const text = convertItalianNumberWords(normalizeVoiceText(rawText));
-  const base = fallbackDate || dateToYMD(new Date());
-  const [baseYear, baseMonth] = base.split("-").map(Number);
-  const months = italianMonthsMap();
-
-  if (/\bdopodomani\b/.test(text)) return [addDaysToYMD(base, 2)];
-  if (/\bdomani\b/.test(text)) return [addDaysToYMD(base, 1)];
-  if (/\boggi\b/.test(text)) return [dateToYMD(new Date())];
-
-  const rangeMatch = text.match(/\b(?:dal|da)\s+(\d{1,2})\s+(?:al|a)\s+(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+(\d{4}))?\b/);
-  if (rangeMatch) {
-    const startDay = Number(rangeMatch[1]);
-    const endDay = Number(rangeMatch[2]);
-    const month = months[rangeMatch[3]];
-    const year = Number(rangeMatch[4] || baseYear);
-    if (!isValidDay(year, month, startDay) || !isValidDay(year, month, endDay) || endDay < startDay) {
-      throw new Error("Intervallo di date non valido.");
-    }
-    const dates = [];
-    for (let day = startDay; day <= endDay; day++) {
-      dates.push(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
-    }
-    return dates;
-  }
-
-  const numericDate = text.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
-  if (numericDate) {
-    const day = Number(numericDate[1]);
-    const month = Number(numericDate[2]);
-    let year = numericDate[3] ? Number(numericDate[3]) : baseYear;
-    if (year < 100) year += 2000;
-    if (!isValidDay(year, month, day)) throw new Error("Data non valida.");
-    return [`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`];
-  }
-
-  const namedDate = text.match(/\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+(\d{4}))?\b/);
-  if (namedDate) {
-    const day = Number(namedDate[1]);
-    const month = months[namedDate[2]];
-    const year = Number(namedDate[3] || baseYear);
-    if (!isValidDay(year, month, day)) throw new Error("Data non valida.");
-    return [`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`];
-  }
-
-  const onlyDay = text.match(/\bil\s+(\d{1,2})\b/);
-  if (onlyDay) {
-    const day = Number(onlyDay[1]);
-    if (!isValidDay(baseYear, baseMonth, day)) throw new Error("Giorno non valido per il mese selezionato.");
-    return [`${baseYear}-${String(baseMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`];
-  }
-
-  return [base];
-}
-
-function parseVoiceRanges(rawText) {
-  let text = convertItalianNumberWords(normalizeVoiceText(rawText));
-  text = text
-    .replace(/\bmezzogiorno\b/g, "12")
-    .replace(/\bmezzanotte\b/g, "00")
-    .replace(/\b(\d{1,2})\s+e\s+(0|00|15|30|45)\b/g, (_, h, m) => `${h}:${String(m).padStart(2, "0")}`)
-    .replace(/\b(\d{1,2})\s+(0|00|15|30|45)\b/g, (_, h, m) => `${h}:${String(m).padStart(2, "0")}`);
-
-  const found = [];
-  const patterns = [
-    /\b(?:dalle|dalla|da)\s+(\d{1,2}(?::\d{1,2})?)\s+(?:alle|alla|a)\s+(\d{1,2}(?::\d{1,2})?)\b/g,
-    /\b(\d{1,2}(?::\d{1,2})?)\s*(?:-|–|—)\s*(\d{1,2}(?::\d{1,2})?)\b/g,
-    /\b(\d{1,2}(?::\d{1,2})?)\s+(?:alle|alla|a)\s+(\d{1,2}(?::\d{1,2})?)\b/g
-  ];
-
-  patterns.forEach(pattern => {
-    let match;
-    while ((match = pattern.exec(text)) !== null) {
-      found.push(buildVoiceRange(match[1], match[2]));
-    }
-  });
-
-  if (!found.length) {
-    let cleaned = text
-      .replace(/\b(?:dal|da)\s+\d{1,2}\s+(?:al|a)\s+\d{1,2}\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+\d{4})?\b/g, " ")
-      .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/g, " ")
-      .replace(/\b\d{1,2}\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+\d{4})?\b/g, " ")
-      .replace(/\b(?:oggi|domani|dopodomani)\b/g, " ");
-
-    const tokens = cleaned.match(/\b\d{1,2}(?::\d{1,2})?\b/g) || [];
-    if (tokens.length >= 2 && tokens.length % 2 === 0) {
-      for (let i = 0; i < tokens.length; i += 2) {
-        found.push(buildVoiceRange(tokens[i], tokens[i + 1]));
-      }
-    }
-  }
-
-  const slots = rangesToSlots(found);
-  return slotsToRanges(slots);
-}
-
-function buildVoiceRange(startText, endText) {
-  const start = normalizeVoiceTime(startText);
-  const end = normalizeVoiceTime(endText);
-  const startM = timeToMinutes(start);
-  const endM = timeToMinutes(end);
-
-  if (startM % 30 !== 0 || endM % 30 !== 0) {
-    throw new Error("Per ora usa orari a mezz'ora: 10:00, 10:30, 11:00.");
-  }
-  if (endM <= startM) throw new Error("L'orario di fine deve essere dopo l'inizio.");
-
-  return { start, end };
-}
-
-function normalizeVoiceTime(value) {
-  let text = String(value || "").trim().replace(/[,.]/g, ":");
-  if (/^\d{3,4}$/.test(text) && Number(text) > 24) {
-    const n = Number(text);
-    text = `${Math.floor(n / 100)}:${String(n % 100).padStart(2, "0")}`;
-  }
-
-  const [rawH, rawM = "0"] = text.split(":");
-  const h = Number(rawH);
-  const m = Number(rawM);
-  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 23 || m < 0 || m > 59) {
-    throw new Error(`Orario non valido: ${value}`);
-  }
-
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function rangesToSlots(ranges) {
-  const slots = new Set();
-  ranges.forEach(range => {
-    const startM = timeToMinutes(range.start);
-    const endM = timeToMinutes(range.end);
-    for (let m = startM; m < endM; m += 30) {
-      slots.add(minutesToTime(m));
-    }
-  });
-  return [...slots].sort();
-}
-
-function normalizeVoiceText(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[.,;]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeForMatch(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function convertItalianNumberWords(text) {
-  const numbers = {
-    zero: 0,
-    uno: 1,
-    un: 1,
-    una: 1,
-    primo: 1,
-    due: 2,
-    tre: 3,
-    quattro: 4,
-    cinque: 5,
-    sei: 6,
-    sette: 7,
-    otto: 8,
-    nove: 9,
-    dieci: 10,
-    undici: 11,
-    dodici: 12,
-    tredici: 13,
-    quattordici: 14,
-    quindici: 15,
-    sedici: 16,
-    diciassette: 17,
-    diciotto: 18,
-    diciannove: 19,
-    venti: 20,
-    ventuno: 21,
-    ventidue: 22,
-    ventitre: 23,
-    ventiquattro: 24,
-    venticinque: 25,
-    ventisei: 26,
-    ventisette: 27,
-    ventotto: 28,
-    ventinove: 29,
-    trenta: 30,
-    trentuno: 31,
-    quarantacinque: 45
-  };
-
-  return text.replace(/\b(zero|uno|un|una|primo|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|quindici|sedici|diciassette|diciotto|diciannove|venti|ventuno|ventidue|ventitre|ventiquattro|venticinque|ventisei|ventisette|ventotto|ventinove|trenta|trentuno|quarantacinque)\b/g, match => String(numbers[match]));
-}
-
-function italianMonthsMap() {
-  return {
-    gennaio: 1,
-    febbraio: 2,
-    marzo: 3,
-    aprile: 4,
-    maggio: 5,
-    giugno: 6,
-    luglio: 7,
-    agosto: 8,
-    settembre: 9,
-    ottobre: 10,
-    novembre: 11,
-    dicembre: 12
-  };
-}
-
-function isValidDay(year, month, day) {
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
-  if (month < 1 || month > 12 || day < 1) return false;
-  return day <= new Date(year, month, 0).getDate();
-}
-
-function addDaysToYMD(ymd, amount) {
-  const date = new Date(`${ymd}T12:00:00`);
-  date.setDate(date.getDate() + amount);
-  return dateToYMD(date);
+  selectEl.value = stillExists ? previousValue : employees[0].id;
 }
 
 async function loadAdminDayReport() {
