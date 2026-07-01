@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "orari-35422",
+    "venice beach": "campi-414b4",
+    "orari": "orari-35422"
+  },
+  "targets": {},
+  "etags": {}
+}
