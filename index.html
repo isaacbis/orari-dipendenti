@@ -1,117 +1,25 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d0d11" />
-  <title>Orari Dirigenti</title>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css" />
-</head>
-<body>
-  <div class="app">
-    <!-- HEADER -->
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo-dot"></div>
-        <h1>Orari Dirigenti</h1>
-      </div>
-      <div class="row gap">
-        <!-- Toggle tema -->
-        <button id="themeToggle" class="btn ghost" aria-label="Cambia tema" title="Cambia tema">🌓</button>
-        <button id="logoutButton" class="btn ghost" aria-label="Logout" title="Logout">Logout</button>
-      </div>
-    </header>
+<div class="brand-box">
+<div class="brand-badge">T38</div>
+<h1>Orari dipendenti</h1>
+        <p>Accesso amministratore e dipendenti, ottimizzato per cellulare.</p>
+</div>
 
-    <!-- LOGIN -->
-    <section id="loginSection" class="card">
-      <h2 class="card-title">Accedi</h2>
-      <div class="form-grid">
-        <label class="field">
-          <span class="label">Username</span>
-          <input id="loginUsername" type="text" autocomplete="username" inputmode="text" />
-        </label>
-        <label class="field">
-          <span class="label">Password</span>
-          <input id="loginPassword" type="password" autocomplete="current-password" />
-        </label>
-      </div>
-      <div class="row between">
-        <span id="loginError" class="msg error" role="alert"></span>
-        <button id="loginButton" class="btn primary">Entra</button>
-      </div>
-    </section>
+<div class="card card-login">
+<div class="section-head compact">
+<h2>Login</h2>
+          <span class="chip chip-soft">Cloud Firestore</span>
+</div>
 
-    <!-- MAIN -->
-    <main id="mainSection" class="hidden content">
-      <!-- Data + Azioni veloci -->
-      <section class="card">
-        <div class="row between wrap">
-          <label class="field slim">
-            <span class="label">Data</span>
-            <input id="selectedDate" type="date" />
-          </label>
-          <div class="row gap">
-            <label class="field slim">
-              <span class="label">Range rapido (es. 09:00 - 13:30)</span>
-              <input id="rangeInput" type="text" inputmode="numeric" placeholder="09:00 - 13:30" />
-            </label>
-            <button id="addRangeButton" class="btn outline">Aggiungi</button>
-          </div>
-        </div>
-      </section>
+<div class="field">
+@@ -37,11 +35,6 @@ <h2>Login</h2>
 
-      <!-- Slot giornalieri -->
-      <section class="card">
-        <h2 class="card-title">I miei slot (30')</h2>
-        <div id="slotsContainer" class="slots-grid" aria-live="polite"></div>
-        <div class="row between">
-          <div class="chip">Ore totali oggi: <strong id="totalHours">0</strong></div>
-          <button id="saveButton" class="btn primary">Salva su Firestore</button>
-        </div>
-        <div id="saveMessage" class="msg" role="status" aria-live="polite"></div>
-      </section>
+<button id="loginBtn" class="btn btn-primary btn-lg">Entra</button>
+<p id="loginMsg" class="msg"></p>
 
-      <!-- Tabella tutti gli utenti -->
-      <section class="card">
-        <h2 class="card-title">Orari di tutti (giorno selezionato)</h2>
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr><th>Utente</th><th>Data</th><th>Slots</th><th>Ore Tot.</th></tr>
-            </thead>
-            <tbody id="allUsersTableBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Statistiche -->
-      <section class="card">
-        <h2 class="card-title">Statistiche personali</h2>
-        <div class="row wrap">
-          <label class="field slim">
-            <span class="label">Mese</span>
-            <input id="selectedMonth" type="month" />
-          </label>
-          <button id="btnCalcStats" class="btn outline">Calcola</button>
-        </div>
-        <div class="stats">
-          <div class="chip big">Ore nel mese: <strong id="monthlyHours">0</strong></div>
-          <div class="chip big">Ore complessive: <strong id="totalHoursAll">0</strong></div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Bottom actions (mobile) -->
-    <nav class="bottom-bar" aria-label="Azioni rapide">
-      <button id="navToday" class="nav-btn active">Oggi</button>
-      <button id="navTop" class="nav-btn">Inizio</button>
-      <button id="navSave" class="nav-btn accent">Salva</button>
-    </nav>
-  </div>
-
-  <!-- JS (cache-busting per evitare versioni vecchie) -->
-  <script type="module" src="./main.js?v=20250811"></script>
-</body>
-</html>
+        <div class="demo-box">
+          <strong>Accesso iniziale</strong>
+          <div>Username: <code>admin</code></div>
+          <div>Password: <code>admin123</code></div>
+</div>
+</div>
+</section>
