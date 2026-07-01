@@ -60,7 +60,7 @@
         <section id="tabSchedule" class="tab-panel active">
           <div class="card">
             <div class="section-head">
-              <h3>Seleziona giorno</h3>
+              <h3>Giorno</h3>
               <span class="chip chip-soft">Mezz'ora</span>
             </div>
 
@@ -96,10 +96,10 @@
 
           <div class="card">
             <div class="section-head">
-              <h3>Inserimento vocale</h3>
+              <h3>Detta orari</h3>
               <span class="chip chip-soft">Le tue ore</span>
             </div>
-            <p class="helper">Puoi dettare una frase tipo: “Segnami le ore di oggi dalle 10 alle 21 e salvamele”. Se dici “salva” o “salvamele”, l'app prova a salvare direttamente.</p>
+            <p class="helper">Detta gli orari oppure scrivili. Se dici “salva”, l'app li salva subito.</p>
 
             <div class="field">
               <label for="personalVoiceDate">Data di riferimento</label>
@@ -113,7 +113,7 @@
 
             <div class="action-row three-actions">
               <button id="startPersonalVoiceBtn" class="btn btn-secondary" type="button">🎙️ Dettatura</button>
-              <button id="parsePersonalVoiceBtn" class="btn btn-light" type="button">Crea anteprima</button>
+              <button id="parsePersonalVoiceBtn" class="btn btn-light" type="button">Anteprima</button>
               <button id="savePersonalVoiceBtn" class="btn btn-primary" type="button">Salva</button>
             </div>
             <p id="personalVoiceMsg" class="msg"></p>
@@ -121,23 +121,23 @@
             <div id="personalVoicePreview" class="voice-preview top-gap">
               <div class="summary-item">
                 <strong>Nessuna anteprima</strong>
-                <small>Frasi utili: “oggi 10-13 e 15-18”, “domani dalle 9 alle 14”, “dal 1 al 5 luglio 10-14”.</small>
+                <small>Esempi: “oggi 10-13 e 15-18”, “domani 9-14”.</small>
               </div>
             </div>
           </div>
 
           <div class="card">
             <div class="section-head">
-              <h3>Selezione rapida</h3>
+              <h3>Slot rapidi</h3>
               <button id="clearSlotsBtn" class="btn btn-light btn-sm">Svuota</button>
             </div>
-            <p class="helper">Tocca gli orari per attivare o disattivare gli slot. Nessuno spostamento laterale della pagina.</p>
+            <p class="helper">Tocca gli slot per modificarli manualmente.</p>
             <div id="slotGrid" class="slot-grid"></div>
           </div>
 
           <div class="card">
             <div class="section-head">
-              <h3>Fasce selezionate</h3>
+              <h3>Fasce</h3>
             </div>
             <div id="selectedRanges" class="range-list"></div>
             <button id="saveDayBtn" class="btn btn-primary btn-lg top-gap">Salva orari</button>
@@ -154,7 +154,7 @@
               <label for="reportMonth">Mese</label>
               <input id="reportMonth" type="month" />
             </div>
-            <button id="loadMyReportBtn" class="btn btn-secondary">Aggiorna report</button>
+            <button id="loadMyReportBtn" class="btn btn-secondary">Aggiorna</button>
 
             <div class="stats-grid top-gap">
               <div class="stat-card">
@@ -187,11 +187,11 @@
         <section id="tabAdmin" class="tab-panel">
           <div class="card">
             <div class="section-head">
-              <h3>Nuovo dipendente</h3>
+              <h3>Aggiungi dipendente</h3>
             </div>
             <div class="field-grid single-mobile">
               <div class="field">
-                <label for="empName">Nome e cognome</label>
+                <label for="empName">Nome</label>
                 <input id="empName" type="text" placeholder="Mario Rossi" />
               </div>
               <div class="field">
@@ -203,7 +203,7 @@
                 <input id="empPassword" type="text" placeholder="1234" />
               </div>
               <div class="field">
-                <label for="empRate">Paga oraria (€)</label>
+                <label for="empRate">Paga €/h</label>
                 <input id="empRate" type="number" min="0" step="0.01" placeholder="10" />
               </div>
             </div>
@@ -220,10 +220,10 @@
 
           <div class="card">
             <div class="section-head">
-              <h3>Inserimento vocale ore dipendenti</h3>
+              <h3>Detta ore dipendenti</h3>
               <span class="chip chip-soft">Admin</span>
             </div>
-            <p class="helper">Scegli il dipendente, premi il microfono e detta gli orari. Se dici “salva” o “salvamele”, l'app prova a salvare direttamente.</p>
+            <p class="helper">Scegli il dipendente, detta gli orari e conferma. Se dici “salva”, li salva subito.</p>
 
             <div class="field-grid single-mobile">
               <div class="field">
@@ -243,15 +243,15 @@
 
             <div class="action-row three-actions">
               <button id="startVoiceBtn" class="btn btn-secondary" type="button">🎙️ Dettatura</button>
-              <button id="parseVoiceBtn" class="btn btn-light" type="button">Crea anteprima</button>
-              <button id="saveVoiceBtn" class="btn btn-primary" type="button">Conferma e salva</button>
+              <button id="parseVoiceBtn" class="btn btn-light" type="button">Anteprima</button>
+              <button id="saveVoiceBtn" class="btn btn-primary" type="button">Salva</button>
             </div>
             <p id="voiceMsg" class="msg"></p>
 
             <div id="voicePreview" class="voice-preview top-gap">
               <div class="summary-item">
                 <strong>Nessuna anteprima</strong>
-                <small>Frasi utili: “Giulia oggi 10-13 e 15-18”, “Marco domani dalle 9 alle 14”, “Sara dal 1 al 5 luglio 10-14”.</small>
+                <small>Esempi: “Giulia oggi 10-13”, “Marco domani 9-14”.</small>
               </div>
             </div>
           </div>
@@ -264,28 +264,28 @@
               <label for="adminDay">Data</label>
               <input id="adminDay" type="date" />
             </div>
-            <button id="loadAdminDayBtn" class="btn btn-secondary">Carica report giornaliero</button>
+            <button id="loadAdminDayBtn" class="btn btn-secondary">Carica giorno</button>
             <div id="adminDayReport" class="report-cards top-gap"></div>
           </div>
 
           <div class="card">
             <div class="section-head">
-              <h3>Report mensile generale</h3>
+              <h3>Mensile generale</h3>
             </div>
             <div class="field">
               <label for="adminMonth">Mese</label>
               <input id="adminMonth" type="month" />
             </div>
-            <button id="loadAdminMonthBtn" class="btn btn-secondary">Carica report mensile</button>
+            <button id="loadAdminMonthBtn" class="btn btn-secondary">Carica mese</button>
             <div id="adminMonthReport" class="report-cards top-gap"></div>
           </div>
 
           <div class="card">
             <div class="section-head">
-              <h3>Report mensile dipendente</h3>
+              <h3>Mensile dipendente</h3>
               <span class="chip chip-soft">PDF</span>
             </div>
-            <p class="helper">Scegli un dipendente e un mese: vedrai tutti i giorni dall'1 alla fine del mese, con giorno della settimana, orari e totale ore.</p>
+            <p class="helper">Scegli dipendente e mese. Vedi tutti i giorni e scarichi il PDF.</p>
 
             <div class="field-grid single-mobile">
               <div class="field">
