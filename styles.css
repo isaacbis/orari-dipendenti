@@ -13,13 +13,29 @@
   --ring:0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
+/* Tema chiaro quando <body> ha .light-mode */
+.light-mode{
+  --bg:#f7f7fb;
+  --bg2:#eff0f6;
+  --card:#ffffff;
+  --text:#111113;
+  --muted:#6b7280;
+  --accent:#ff8a2c;
+  --accent-2:#ffa94d;
+  --ok:#0f766e;
+  --danger:#b91c1c;
+  --border:#e5e7eb;
+  --glass:rgba(0,0,0,.03);
+  --ring:0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
 *{box-sizing:border-box}
 html,body{height:100%}
 html{font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif}
 body{
   margin:0;
   background:
-    radial-gradient(1100px 700px at 80% -10%, rgba(255,138,44,.12), transparent 40%),
+    radial-gradient(1100px 700px at 80% -10%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 40%),
     var(--bg);
   color:var(--text);
   -webkit-font-smoothing:antialiased;
@@ -36,8 +52,8 @@ body{
   display:flex; align-items:center; justify-content:space-between;
   gap:12px; padding:10px 14px;
   backdrop-filter:saturate(120%) blur(10px);
-  background:linear-gradient(180deg, rgba(13,13,17,.95), rgba(13,13,17,.6));
-  border-bottom:1px solid #1f2230;
+  background:linear-gradient(180deg, color-mix(in srgb, var(--bg) 95%, transparent), color-mix(in srgb, var(--bg) 60%, transparent));
+  border-bottom:1px solid color-mix(in srgb, var(--border) 80%, transparent);
 }
 .brand{display:flex; align-items:center; gap:.6rem}
 .logo-dot{width:12px; height:12px; border-radius:50%;
@@ -47,7 +63,7 @@ h1{font-size:1.05rem; margin:0; letter-spacing:.2px}
 
 /* Cards */
 .card{
-  background:linear-gradient(180deg, rgba(255,255,255,.02), transparent 50%), var(--card);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--glass) 60%, transparent), transparent 50%), var(--card);
   border:1px solid var(--border);
   border-radius:18px; padding:14px;
   box-shadow:0 8px 26px rgba(0,0,0,.25);
@@ -57,27 +73,28 @@ h1{font-size:1.05rem; margin:0; letter-spacing:.2px}
 /* Form */
 .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
 .field{display:flex; flex-direction:column; gap:6px; min-width:0}
-.field.slim input,.field.slim select{height:44px}
+.field.slim input{height:44px}
 .label{font-size:.8rem; color:var(--muted)}
 input, select{
   appearance:none; -webkit-appearance:none;
   width:100%; height:48px; padding:12px 12px; border-radius:12px;
-  border:1px solid #262b3d; background:#0f1220; color:var(--text); font-size:16px; /* evita zoom iOS */
+  border:1px solid color-mix(in srgb, var(--border) 100%, transparent);
+  background:color-mix(in srgb, var(--bg2) 100%, transparent);
+  color:var(--text); font-size:16px;
   outline:none;
 }
-input:focus, select:focus{box-shadow:var(--ring); border-color:color-mix(in srgb, var(--accent) 60%, #262b3d)}
-select{padding-right:34px; background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%),linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position:calc(100% - 18px) 19px, calc(100% - 12px) 19px; background-size:6px 6px, 6px 6px; background-repeat:no-repeat}
+input:focus{box-shadow:var(--ring); border-color:color-mix(in srgb, var(--accent) 60%, var(--border))}
 
 /* Buttons */
 .btn{
   display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
   min-width:44px; height:44px; padding:0 16px; border-radius:12px;
-  background:#121526; color:var(--text); border:1px solid #2a2f43; font-weight:700;
+  background:color-mix(in srgb, var(--bg2) 100%, transparent); color:var(--text);
+  border:1px solid color-mix(in srgb, var(--border) 100%, transparent); font-weight:700;
   transition:transform .08s ease, background .2s ease, border-color .2s ease;
   touch-action:manipulation;
 }
 .btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.55; cursor:not-allowed; transform:none}
 .btn.primary{background:linear-gradient(180deg, var(--accent), var(--accent-2)); color:#111; border:none}
 .btn.outline{background:transparent}
 .btn.ghost{background:transparent}
@@ -121,15 +138,8 @@ select{padding-right:34px; background-image:linear-gradient(45deg, transparent 5
 /* Table -> Cards on mobile */
 .table-wrap{overflow:auto; border-radius:12px; border:1px solid var(--border)}
 .table{width:100%; border-collapse:collapse; min-width:640px}
-.table th,.table td{padding:10px 12px; border-bottom:1px solid #1e2230; text-align:left; vertical-align:top}
+.table th,.table td{padding:10px 12px; border-bottom:1px solid #1e2230; text-align:left}
 .table th{background:#111426; color:#dfe1e6; font-weight:700}
-
-/* Report mensile */
-.report-actions{align-items:flex-end}
-.report-actions .field{min-width:180px; flex:1}
-.report-summary{margin:10px 0 12px; display:flex; gap:10px; flex-wrap:wrap}
-.report-table-wrap{margin-top:8px}
-.report-table-wrap .table td:nth-child(3){white-space:normal; min-width:170px}
 
 @media (max-width: 640px){
   .form-grid{grid-template-columns:1fr}
@@ -138,10 +148,7 @@ select{padding-right:34px; background-image:linear-gradient(45deg, transparent 5
   .table thead{display:none}
   .table tr{display:grid; grid-template-columns:1fr; gap:6px; padding:10px 12px; border-bottom:1px solid #1e2230}
   .table td{display:flex; justify-content:space-between; gap:12px; border:none; padding:0}
-  .table td::before{content:attr(data-label); color:var(--muted); flex:0 0 auto}
-  .table td{word-break:break-word}
-  .report-actions .field{min-width:100%}
-  .report-actions .btn{width:100%}
+  .table td::before{content:attr(data-label); color:var(--muted)}
 }
 
 /* Bottom bar */

@@ -17,7 +17,11 @@
         <div class="logo-dot"></div>
         <h1>Orari Dirigenti</h1>
       </div>
-      <button id="logoutButton" class="btn ghost" aria-label="Logout" title="Logout">Logout</button>
+      <div class="row gap">
+        <!-- Toggle tema -->
+        <button id="themeToggle" class="btn ghost" aria-label="Cambia tema" title="Cambia tema">🌓</button>
+        <button id="logoutButton" class="btn ghost" aria-label="Logout" title="Logout">Logout</button>
+      </div>
     </header>
 
     <!-- LOGIN -->
@@ -97,41 +101,6 @@
           <div class="chip big">Ore complessive: <strong id="totalHoursAll">0</strong></div>
         </div>
       </section>
-
-      <!-- Report mensile PDF -->
-      <section class="card" id="reportSection">
-        <h2 class="card-title">Report mensile utente</h2>
-        <div class="row wrap report-actions">
-          <label class="field slim">
-            <span class="label">Utente</span>
-            <select id="reportUserSelect">
-              <option value="">Seleziona utente</option>
-            </select>
-          </label>
-          <label class="field slim">
-            <span class="label">Mese</span>
-            <input id="reportMonth" type="month" />
-          </label>
-          <button id="btnGenerateReport" class="btn outline">Genera report</button>
-          <button id="btnDownloadPdf" class="btn primary" disabled>Scarica PDF</button>
-        </div>
-
-        <div id="reportMessage" class="msg" role="status" aria-live="polite"></div>
-
-        <div class="stats report-summary">
-          <div class="chip big">Totale mese: <strong id="reportTotalHours">0</strong></div>
-          <div class="chip big">Giorni lavorati: <strong id="reportWorkedDays">0</strong></div>
-        </div>
-
-        <div class="table-wrap report-table-wrap">
-          <table class="table">
-            <thead>
-              <tr><th>Giorno</th><th>Data</th><th>Orario da - a</th><th>Ore Tot.</th></tr>
-            </thead>
-            <tbody id="monthlyReportBody"></tbody>
-          </table>
-        </div>
-      </section>
     </main>
 
     <!-- Bottom actions (mobile) -->
@@ -142,11 +111,7 @@
     </nav>
   </div>
 
-  <!-- JS PDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-
-  <!-- JS -->
-  <script type="module" src="./main.js"></script>
+  <!-- JS (cache-busting per evitare versioni vecchie) -->
+  <script type="module" src="./main.js?v=20250811"></script>
 </body>
 </html>
