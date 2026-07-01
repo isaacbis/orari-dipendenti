@@ -35,6 +35,7 @@ const state = {
   employees: [],
   selectedSlots: new Set(),
   slots: generateSlots(),
+  employeeMonthReport: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -81,6 +82,13 @@ const els = {
   loadAdminMonthBtn: $("loadAdminMonthBtn"),
   adminDayReport: $("adminDayReport"),
   adminMonthReport: $("adminMonthReport"),
+  adminReportEmployee: $("adminReportEmployee"),
+  adminReportMonth: $("adminReportMonth"),
+  loadEmployeeMonthBtn: $("loadEmployeeMonthBtn"),
+  downloadEmployeePdfBtn: $("downloadEmployeePdfBtn"),
+  employeePdfMsg: $("employeePdfMsg"),
+  employeeMonthSummary: $("employeeMonthSummary"),
+  employeeMonthTable: $("employeeMonthTable"),
 };
 
 init();
@@ -94,6 +102,9 @@ async function init() {
 
 function bindEvents() {
   els.loginBtn.addEventListener("click", handleLogin);
+  els.loginPassword.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") handleLogin();
+  });
   els.logoutBtn.addEventListener("click", logout);
   els.selectedDate.addEventListener("change", loadSelectedDay);
   els.addRangeBtn.addEventListener("click", addRangeFromInputs);
@@ -103,6 +114,10 @@ function bindEvents() {
   els.createEmployeeBtn.addEventListener("click", createEmployee);
   els.loadAdminDayBtn.addEventListener("click", loadAdminDayReport);
   els.loadAdminMonthBtn.addEventListener("click", loadAdminMonthReport);
+  els.loadEmployeeMonthBtn.addEventListener("click", loadAdminEmployeeMonthReport);
+  els.downloadEmployeePdfBtn.addEventListener("click", downloadAdminEmployeeMonthPdf);
+  els.adminReportEmployee.addEventListener("change", clearEmployeeMonthReport);
+  els.adminReportMonth.addEventListener("change", clearEmployeeMonthReport);
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => activateTab(btn.dataset.tab, btn));
@@ -159,6 +174,7 @@ async function handleLogin() {
     await loadEmployees();
     await loadAdminDayReport();
     await loadAdminMonthReport();
+    await loadAdminEmployeeMonthReport({ silent: true });
   }
 
   await loadSelectedDay();
@@ -168,7 +184,9 @@ async function handleLogin() {
 function logout() {
   state.currentUser = null;
   state.selectedSlots = new Set();
+  state.employeeMonthReport = null;
   renderSelectedState();
+  clearEmployeeMonthReport();
   els.appView.classList.add("hidden");
   els.loginView.classList.remove("hidden");
   els.loginUsername.value = "";
@@ -184,6 +202,7 @@ function setDefaultDates() {
   els.adminDay.value = ymd;
   els.reportMonth.value = ym;
   els.adminMonth.value = ym;
+  els.adminReportMonth.value = ym;
 }
 
 function generateSlots() {
@@ -294,8 +313,7 @@ async function saveSelectedDay() {
 
   const ref = doc(db, "workSessions", `${state.currentUser.id}_${date}`);
 
-  // Se non ci sono slot, non salvo una giornata a 0: elimino proprio il documento.
-  // Così un orario inserito per errore sparisce dai report e non ricompare al ricaricamento.
+  // Se non ci sono slot, elimino il documento: così il giorno sparisce dai report.
   if (slots.length === 0) {
     await deleteDoc(ref);
     setMsg(els.saveMsg, "Orario cancellato: giornata senza ore lavorate.", "success");
@@ -303,6 +321,7 @@ async function saveSelectedDay() {
     if (state.currentUser.role === "admin") {
       await loadAdminDayReport();
       await loadAdminMonthReport();
+      await loadAdminEmployeeMonthReport({ silent: true });
     }
     await loadMyReports();
     renderSelectedState();
@@ -325,6 +344,7 @@ async function saveSelectedDay() {
   if (state.currentUser.role === "admin") {
     await loadAdminDayReport();
     await loadAdminMonthReport();
+    await loadAdminEmployeeMonthReport({ silent: true });
   }
   await loadMyReports();
 }
@@ -344,9 +364,9 @@ async function loadMyReports() {
 
   const rate = Number(state.currentUser.hourlyRate || 0);
   els.myMonthHours.textContent = monthHours.toFixed(2);
-  els.myMonthPay.textContent = `€ ${(monthHours * rate).toFixed(2)}`;
+  els.myMonthPay.textContent = formatEuro(monthHours * rate);
   els.myTotalHours.textContent = totalHours.toFixed(2);
-  els.myTotalPay.textContent = `€ ${(totalHours * rate).toFixed(2)}`;
+  els.myTotalPay.textContent = formatEuro(totalHours * rate);
 }
 
 function renderMyDaySummary(ranges = slotsToRanges([...state.selectedSlots])) {
@@ -360,7 +380,7 @@ function renderMyDaySummary(ranges = slotsToRanges([...state.selectedSlots])) {
   item.className = "summary-item";
   item.innerHTML = `
     <strong>${els.selectedDate.value}</strong>
-    <div class="big">${ranges.map(r => `${r.start}-${r.end}`).join(" • ")}</div>
+    <div class="big">${ranges.map(r => `${r.start} - ${r.end}`).join(" / ")}</div>
     <small>Totale giornata: ${total.toFixed(2)} ore</small>
   `;
   els.myDaySummary.appendChild(item);
@@ -405,8 +425,8 @@ async function loadEmployees() {
     item.className = "employee-item";
     item.innerHTML = `
       <div>
-        <strong>${emp.name}</strong>
-        <small>@${emp.username} • ${emp.role === 'admin' ? 'Admin' : 'Dipendente'} • € ${Number(emp.hourlyRate || 0).toFixed(2)}/h</small>
+        <strong>${escapeHTML(emp.name || "Senza nome")}</strong>
+        <small>@${escapeHTML(emp.username || "")} • ${emp.role === 'admin' ? 'Admin' : 'Dipendente'} • ${formatEuro(Number(emp.hourlyRate || 0))}/h</small>
       </div>
       ${emp.role === 'admin' ? '<span class="chip">Admin</span>' : '<button class="btn btn-light btn-sm" type="button">Elimina</button>'}
     `;
@@ -415,16 +435,45 @@ async function loadEmployees() {
       if (!confirm(`Eliminare ${emp.name}?`)) return;
       await deleteDoc(doc(db, "employees", emp.id));
       await loadEmployees();
+      await loadAdminMonthReport();
+      await loadAdminEmployeeMonthReport({ silent: true });
     });
     els.employeeList.appendChild(item);
   });
+
+  populateAdminEmployeeSelect();
+}
+
+function populateAdminEmployeeSelect() {
+  const previous = els.adminReportEmployee.value;
+  const employees = state.employees.filter(emp => emp.role !== "admin" && emp.active !== false);
+
+  els.adminReportEmployee.innerHTML = "";
+
+  if (!employees.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Nessun dipendente disponibile";
+    els.adminReportEmployee.appendChild(option);
+    return;
+  }
+
+  employees.forEach(emp => {
+    const option = document.createElement("option");
+    option.value = emp.id;
+    option.textContent = emp.name || emp.username || "Dipendente";
+    els.adminReportEmployee.appendChild(option);
+  });
+
+  const stillExists = employees.some(emp => emp.id === previous);
+  els.adminReportEmployee.value = stillExists ? previous : employees[0].id;
 }
 
 async function loadAdminDayReport() {
   if (!state.currentUser || state.currentUser.role !== "admin") return;
   const date = els.adminDay.value;
   const snap = await getDocs(query(collection(db, "workSessions"), where("date", "==", date)));
-  const items = snap.docs.map(d => d.data()).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  const items = snap.docs.map(d => d.data()).sort((a, b) => String(a.employeeName || "").localeCompare(String(b.employeeName || "")));
   els.adminDayReport.innerHTML = "";
 
   if (!items.length) {
@@ -436,9 +485,9 @@ async function loadAdminDayReport() {
     const div = document.createElement("div");
     div.className = "report-item";
     div.innerHTML = `
-      <strong>${item.employeeName}</strong>
-      <div class="big">${item.ranges?.map(r => `${r.start}-${r.end}`).join(" • ") || '-'}</div>
-      <small>${item.totalHours.toFixed(2)} ore</small>
+      <strong>${escapeHTML(item.employeeName || "Dipendente")}</strong>
+      <div class="big">${escapeHTML(formatRanges(item) || "-")}</div>
+      <small>${Number(item.totalHours || 0).toFixed(2)} ore</small>
     `;
     els.adminDayReport.appendChild(div);
   });
@@ -465,19 +514,244 @@ async function loadAdminMonthReport() {
 
   [...map.entries()]
     .map(([id, v]) => ({ id, ...v }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
     .forEach(row => {
       const employee = state.employees.find(e => e.id === row.id);
       const rate = Number(employee?.hourlyRate || 0);
       const div = document.createElement("div");
       div.className = "report-item";
       div.innerHTML = `
-        <strong>${row.name}</strong>
+        <strong>${escapeHTML(row.name || "Dipendente")}</strong>
         <div class="big">${row.hours.toFixed(2)} ore</div>
-        <small>Compenso stimato: € ${(row.hours * rate).toFixed(2)}</small>
+        <small>Compenso stimato: ${formatEuro(row.hours * rate)}</small>
       `;
       els.adminMonthReport.appendChild(div);
     });
+}
+
+async function loadAdminEmployeeMonthReport(options = {}) {
+  if (!state.currentUser || state.currentUser.role !== "admin") return null;
+  const employeeId = els.adminReportEmployee.value;
+  const month = els.adminReportMonth.value;
+
+  if (!employeeId || !month) {
+    clearEmployeeMonthReport("Seleziona dipendente e mese.");
+    return null;
+  }
+
+  const employee = state.employees.find(emp => emp.id === employeeId);
+  if (!employee) {
+    clearEmployeeMonthReport("Dipendente non trovato.");
+    return null;
+  }
+
+  const rows = await buildEmployeeMonthRows(employeeId, month);
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
+  const daysWorked = rows.filter(row => row.hours > 0).length;
+  const rate = Number(employee.hourlyRate || 0);
+  const totalPay = totalHours * rate;
+
+  state.employeeMonthReport = {
+    employee,
+    month,
+    rows,
+    totalHours,
+    daysWorked,
+    totalPay
+  };
+
+  renderEmployeeMonthSummary(state.employeeMonthReport);
+  renderEmployeeMonthTable(rows);
+
+  if (!options.silent) {
+    setMsg(els.employeePdfMsg, "Report caricato.", "success");
+  }
+
+  return state.employeeMonthReport;
+}
+
+async function buildEmployeeMonthRows(employeeId, month) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const snap = await getDocs(query(collection(db, "workSessions"), where("employeeId", "==", employeeId)));
+  const sessionsByDate = new Map();
+
+  snap.docs
+    .map(d => d.data())
+    .filter(item => item.date?.startsWith(month))
+    .forEach(item => sessionsByDate.set(item.date, item));
+
+  const rows = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${month}-${String(day).padStart(2, "0")}`;
+    const session = sessionsByDate.get(date);
+    rows.push({
+      date,
+      dateLabel: formatDateIT(date),
+      weekday: formatWeekdayIT(date),
+      rangesText: session ? formatRanges(session) : "-",
+      hours: Number(session?.totalHours || 0),
+    });
+  }
+
+  return rows;
+}
+
+function renderEmployeeMonthSummary(report) {
+  els.employeeMonthSummary.innerHTML = `
+    <div class="stat-card">
+      <span>Dipendente</span>
+      <strong>${escapeHTML(report.employee.name || "Dipendente")}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Mese</span>
+      <strong>${formatMonthIT(report.month)}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Ore mese</span>
+      <strong>${report.totalHours.toFixed(2)}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Giorni lavorati</span>
+      <strong>${report.daysWorked}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Paga oraria</span>
+      <strong>${formatEuro(Number(report.employee.hourlyRate || 0))}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Compenso stimato</span>
+      <strong>${formatEuro(report.totalPay)}</strong>
+    </div>
+  `;
+}
+
+function renderEmployeeMonthTable(rows) {
+  if (!rows.length) {
+    els.employeeMonthTable.innerHTML = `<tr><td colspan="4">Nessun giorno trovato.</td></tr>`;
+    return;
+  }
+
+  els.employeeMonthTable.innerHTML = rows.map(row => `
+    <tr class="${row.hours > 0 ? 'worked' : ''}">
+      <td>${escapeHTML(row.dateLabel)}</td>
+      <td>${escapeHTML(row.weekday)}</td>
+      <td>${escapeHTML(row.rangesText)}</td>
+      <td>${row.hours > 0 ? row.hours.toFixed(2) : '-'}</td>
+    </tr>
+  `).join("");
+}
+
+function clearEmployeeMonthReport(message = "") {
+  state.employeeMonthReport = null;
+  if (els.employeeMonthSummary) els.employeeMonthSummary.innerHTML = "";
+  if (els.employeeMonthTable) {
+    els.employeeMonthTable.innerHTML = `<tr><td colspan="4">Carica un report mensile.</td></tr>`;
+  }
+  if (message) setMsg(els.employeePdfMsg, message, "error");
+  else setMsg(els.employeePdfMsg, "");
+}
+
+async function downloadAdminEmployeeMonthPdf() {
+  if (!state.currentUser || state.currentUser.role !== "admin") return;
+
+  let report = state.employeeMonthReport;
+  const selectedEmployeeId = els.adminReportEmployee.value;
+  const selectedMonth = els.adminReportMonth.value;
+
+  if (!report || report.employee.id !== selectedEmployeeId || report.month !== selectedMonth) {
+    report = await loadAdminEmployeeMonthReport({ silent: true });
+  }
+
+  if (!report) return;
+
+  const JsPDF = window.jspdf?.jsPDF;
+  if (!JsPDF) {
+    setMsg(els.employeePdfMsg, "PDF non disponibile: controlla la connessione e ricarica la pagina.", "error");
+    return;
+  }
+
+  const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 12;
+  const tableWidth = pageWidth - margin * 2;
+  const colDate = 25;
+  const colDay = 34;
+  const colHours = 18;
+  const colRanges = tableWidth - colDate - colDay - colHours;
+  const lineHeight = 5;
+
+  let y = 16;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+  pdf.text("Report mensile orari", margin, y);
+
+  y += 8;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.text(`Dipendente: ${report.employee.name || "Dipendente"}`, margin, y);
+  y += 6;
+  pdf.text(`Mese: ${formatMonthIT(report.month)}`, margin, y);
+  y += 6;
+  pdf.text(`Ore mese: ${report.totalHours.toFixed(2)} - Giorni lavorati: ${report.daysWorked}`, margin, y);
+  y += 6;
+  pdf.text(`Paga oraria: ${formatEuro(Number(report.employee.hourlyRate || 0))} - Compenso stimato: ${formatEuro(report.totalPay)}`, margin, y);
+  y += 9;
+
+  drawPdfTableHeader();
+
+  report.rows.forEach(row => {
+    const rangesLines = pdf.splitTextToSize(row.rangesText, colRanges - 4);
+    const rowHeight = Math.max(8, rangesLines.length * lineHeight + 4);
+
+    if (y + rowHeight > pageHeight - 14) {
+      pdf.addPage();
+      y = 16;
+      drawPdfTableHeader();
+    }
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5);
+    pdf.rect(margin, y, tableWidth, rowHeight);
+    pdf.line(margin + colDate, y, margin + colDate, y + rowHeight);
+    pdf.line(margin + colDate + colDay, y, margin + colDate + colDay, y + rowHeight);
+    pdf.line(margin + colDate + colDay + colRanges, y, margin + colDate + colDay + colRanges, y + rowHeight);
+
+    pdf.text(row.dateLabel, margin + 2, y + 5);
+    pdf.text(row.weekday, margin + colDate + 2, y + 5);
+    pdf.text(rangesLines, margin + colDate + colDay + 2, y + 5);
+    pdf.text(row.hours > 0 ? row.hours.toFixed(2) : "-", margin + colDate + colDay + colRanges + 2, y + 5);
+
+    y += rowHeight;
+  });
+
+  const fileName = `report-${slugify(report.employee.name || "dipendente")}-${report.month}.pdf`;
+  pdf.save(fileName);
+  setMsg(els.employeePdfMsg, "PDF scaricato.", "success");
+
+  function drawPdfTableHeader() {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.5);
+    pdf.rect(margin, y, tableWidth, 8);
+    pdf.line(margin + colDate, y, margin + colDate, y + 8);
+    pdf.line(margin + colDate + colDay, y, margin + colDate + colDay, y + 8);
+    pdf.line(margin + colDate + colDay + colRanges, y, margin + colDate + colDay + colRanges, y + 8);
+    pdf.text("Data", margin + 2, y + 5);
+    pdf.text("Giorno", margin + colDate + 2, y + 5);
+    pdf.text("Orari", margin + colDate + colDay + 2, y + 5);
+    pdf.text("Ore", margin + colDate + colDay + colRanges + 2, y + 5);
+    y += 8;
+  }
+}
+
+function formatRanges(item) {
+  const ranges = Array.isArray(item?.ranges) && item.ranges.length
+    ? item.ranges
+    : slotsToRanges(item?.slots || []);
+
+  return ranges.map(r => `${r.start} - ${r.end}`).join(" / ");
 }
 
 function slotsToRanges(slots) {
@@ -515,6 +789,49 @@ function timeToMinutes(time) {
 
 function dateToYMD(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateIT(dateString) {
+  const [year, month, day] = dateString.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function formatWeekdayIT(dateString) {
+  const date = new Date(`${dateString}T12:00:00`);
+  const text = new Intl.DateTimeFormat("it-IT", { weekday: "long" }).format(date);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function formatMonthIT(monthString) {
+  const [year, month] = monthString.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+  const text = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(date);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function formatEuro(value) {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR"
+  }).format(Number(value || 0));
+}
+
+function slugify(text) {
+  return String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "report";
+}
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function setMsg(el, text, type = "") {

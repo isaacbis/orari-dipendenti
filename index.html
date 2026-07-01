@@ -35,7 +35,6 @@
 
         <button id="loginBtn" class="btn btn-primary btn-lg">Entra</button>
         <p id="loginMsg" class="msg"></p>
-        </div>
       </div>
     </section>
 
@@ -201,7 +200,7 @@
 
           <div class="card">
             <div class="section-head">
-              <h3>Report mensile</h3>
+              <h3>Report mensile generale</h3>
             </div>
             <div class="field">
               <label for="adminMonth">Mese</label>
@@ -210,11 +209,56 @@
             <button id="loadAdminMonthBtn" class="btn btn-secondary">Carica report mensile</button>
             <div id="adminMonthReport" class="report-cards top-gap"></div>
           </div>
+
+          <div class="card">
+            <div class="section-head">
+              <h3>Report mensile dipendente</h3>
+              <span class="chip chip-soft">PDF</span>
+            </div>
+            <p class="helper">Scegli un dipendente e un mese: vedrai tutti i giorni dall'1 alla fine del mese, con giorno della settimana, orari e totale ore.</p>
+
+            <div class="field-grid single-mobile">
+              <div class="field">
+                <label for="adminReportEmployee">Dipendente</label>
+                <select id="adminReportEmployee"></select>
+              </div>
+              <div class="field">
+                <label for="adminReportMonth">Mese</label>
+                <input id="adminReportMonth" type="month" />
+              </div>
+            </div>
+
+            <div class="action-row">
+              <button id="loadEmployeeMonthBtn" class="btn btn-secondary" type="button">Mostra report</button>
+              <button id="downloadEmployeePdfBtn" class="btn btn-primary" type="button">Scarica PDF</button>
+            </div>
+            <p id="employeePdfMsg" class="msg"></p>
+
+            <div id="employeeMonthSummary" class="stats-grid top-gap"></div>
+            <div class="table-wrap top-gap">
+              <table class="month-report-table">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Giorno</th>
+                    <th>Orari</th>
+                    <th>Ore</th>
+                  </tr>
+                </thead>
+                <tbody id="employeeMonthTable">
+                  <tr>
+                    <td colspan="4">Carica un report mensile.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
       </main>
     </section>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script type="module" src="main.js"></script>
 </body>
 </html>

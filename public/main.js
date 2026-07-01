@@ -1,4 +1,3 @@
-const STORAGE_KEY = "orariDipendenti.v1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-analytics.js";
 import {
@@ -27,65 +26,20 @@ const firebaseConfig = {
   measurementId: "G-VLXX8EF66K"
 };
 
-const $ = (id) => document.getElementById(id);
 const app = initializeApp(firebaseConfig);
 try { getAnalytics(app); } catch {}
 const db = getFirestore(app);
 
 const state = {
-currentUser: null,
+  currentUser: null,
   employees: [],
-selectedSlots: new Set(),
+  selectedSlots: new Set(),
   slots: generateSlots(),
+  employeeMonthReport: null,
 };
 
-function defaultData() {
-  return {
-    users: [
-      {
-        id: crypto.randomUUID(),
-        name: "Amministratore",
-        username: "admin",
-        password: "admin123",
-        role: "admin",
-        hourlyRate: 0,
-      },
-    ],
-    shifts: {},
-  };
-}
-
-function loadData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    const data = defaultData();
-    saveData(data);
-    return data;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed.users || !parsed.shifts) throw new Error("Dati non validi");
-    return parsed;
-  } catch {
-    const data = defaultData();
-    saveData(data);
-    return data;
-  }
-}
-
-function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function pad(n) {
-  return String(n).padStart(2, "0");
-}
 const $ = (id) => document.getElementById(id);
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 const els = {
   loginView: $("loginView"),
   appView: $("appView"),
@@ -128,17 +82,17 @@ const els = {
   loadAdminMonthBtn: $("loadAdminMonthBtn"),
   adminDayReport: $("adminDayReport"),
   adminMonthReport: $("adminMonthReport"),
+  adminReportEmployee: $("adminReportEmployee"),
+  adminReportMonth: $("adminReportMonth"),
+  loadEmployeeMonthBtn: $("loadEmployeeMonthBtn"),
+  downloadEmployeePdfBtn: $("downloadEmployeePdfBtn"),
+  employeePdfMsg: $("employeePdfMsg"),
+  employeeMonthSummary: $("employeeMonthSummary"),
+  employeeMonthTable: $("employeeMonthTable"),
 };
 
-function currentMonthISO() {
-  const now = new Date();
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-}
 init();
 
-function minutesToTime(minutes) {
-  if (minutes === 1440) return "24:00";
-  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 async function init() {
   setDefaultDates();
   bindEvents();
@@ -146,12 +100,11 @@ async function init() {
   await ensureAdminExists();
 }
 
-function timeToMinutes(time) {
-  if (time === "24:00") return 1440;
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
 function bindEvents() {
   els.loginBtn.addEventListener("click", handleLogin);
+  els.loginPassword.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") handleLogin();
+  });
   els.logoutBtn.addEventListener("click", logout);
   els.selectedDate.addEventListener("change", loadSelectedDay);
   els.addRangeBtn.addEventListener("click", addRangeFromInputs);
@@ -161,14 +114,16 @@ function bindEvents() {
   els.createEmployeeBtn.addEventListener("click", createEmployee);
   els.loadAdminDayBtn.addEventListener("click", loadAdminDayReport);
   els.loadAdminMonthBtn.addEventListener("click", loadAdminMonthReport);
+  els.loadEmployeeMonthBtn.addEventListener("click", loadAdminEmployeeMonthReport);
+  els.downloadEmployeePdfBtn.addEventListener("click", downloadAdminEmployeeMonthPdf);
+  els.adminReportEmployee.addEventListener("change", clearEmployeeMonthReport);
+  els.adminReportMonth.addEventListener("change", clearEmployeeMonthReport);
 
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => activateTab(btn.dataset.tab, btn));
   });
 }
 
-function allSlotStarts() {
-  return Array.from({ length: 48 }, (_, i) => minutesToTime(i * 30));
 function activateTab(tabId, btn) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
@@ -192,25 +147,15 @@ async function ensureAdminExists() {
   }
 }
 
-function allTimeBoundaries() {
-  return Array.from({ length: 49 }, (_, i) => minutesToTime(i * 30));
-}
 async function handleLogin() {
   const username = els.loginUsername.value.trim();
   const password = els.loginPassword.value.trim();
   if (!username || !password) return setMsg(els.loginMsg, "Inserisci username e password.", "error");
 
-function slotToLabel(slot) {
-  const start = timeToMinutes(slot);
-  return `${slot}-${minutesToTime(start + 30)}`;
-}
   const q = query(collection(db, "employees"), where("username", "==", username));
   const snap = await getDocs(q);
   if (snap.empty) return setMsg(els.loginMsg, "Credenziali non valide.", "error");
 
-function selectedUserIdForWork() {
-  if (state.currentUser?.role === "admin") {
-    return $("workUserSelect").value || state.currentUser.id;
   const docSnap = snap.docs.find(d => {
     const data = d.data();
     return data.password === password && data.active === true;
@@ -229,27 +174,19 @@ function selectedUserIdForWork() {
     await loadEmployees();
     await loadAdminDayReport();
     await loadAdminMonthReport();
-}
-  return state.currentUser?.id;
-}
+    await loadAdminEmployeeMonthReport({ silent: true });
+  }
 
-function shiftKey(userId, date) {
-  return `${userId}_${date}`;
-}
-
-function getShift(data, userId, date) {
-  return data.shifts[shiftKey(userId, date)] || { userId, date, slots: [] };
   await loadSelectedDay();
   await loadMyReports();
 }
 
-function setMessage(el, text, type = "") {
-  el.textContent = text;
-  el.className = `message ${type}`.trim();
 function logout() {
   state.currentUser = null;
   state.selectedSlots = new Set();
+  state.employeeMonthReport = null;
   renderSelectedState();
+  clearEmployeeMonthReport();
   els.appView.classList.add("hidden");
   els.loginView.classList.remove("hidden");
   els.loginUsername.value = "";
@@ -265,6 +202,7 @@ function setDefaultDates() {
   els.adminDay.value = ymd;
   els.reportMonth.value = ym;
   els.adminMonth.value = ym;
+  els.adminReportMonth.value = ym;
 }
 
 function generateSlots() {
@@ -286,57 +224,24 @@ function renderSlotGrid() {
   renderSelectedState();
 }
 
-function getEmployees(data) {
-  return data.users.filter((user) => user.role === "employee");
 function toggleSlot(time) {
   if (state.selectedSlots.has(time)) state.selectedSlots.delete(time);
   else state.selectedSlots.add(time);
   renderSelectedState();
 }
 
-function getUserById(data, id) {
-  return data.users.find((user) => user.id === id);
 function clearSelection() {
   state.selectedSlots = new Set();
   renderSelectedState();
 }
 
-function buildTimeSelects() {
-  const start = $("startTime");
-  const end = $("endTime");
-  start.innerHTML = "";
-  end.innerHTML = "";
-
-  allTimeBoundaries().forEach((time, index) => {
-    if (index < 48) start.add(new Option(time, time));
-    if (index > 0) end.add(new Option(time, time));
 function renderSelectedState() {
   const buttons = [...els.slotGrid.querySelectorAll(".slot-btn")];
   buttons.forEach((btn, i) => {
     const t = state.slots[i];
     btn.classList.toggle("active", state.selectedSlots.has(t));
-});
+  });
 
-  start.value = "08:00";
-  end.value = "13:00";
-}
-
-function buildSlotsGrid() {
-  const grid = $("slotsGrid");
-  grid.innerHTML = "";
-
-  allSlotStarts().forEach((slot) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "slot";
-    button.dataset.slot = slot;
-    button.textContent = slot;
-    button.title = slotToLabel(slot);
-    button.addEventListener("click", () => {
-      if (state.selectedSlots.has(slot)) state.selectedSlots.delete(slot);
-      else state.selectedSlots.add(slot);
-      renderSlots();
-      renderReports();
   const ranges = slotsToRanges([...state.selectedSlots]);
   els.selectedRanges.innerHTML = "";
   if (!ranges.length) {
@@ -354,24 +259,14 @@ function buildSlotsGrid() {
       `;
       div.querySelector("button").addEventListener("click", () => removeRange(range));
       els.selectedRanges.appendChild(div);
-});
-    grid.appendChild(button);
-  });
-}
+    });
   }
 
-function renderSlots() {
-  document.querySelectorAll(".slot").forEach((btn) => {
-    btn.classList.toggle("selected", state.selectedSlots.has(btn.dataset.slot));
-  });
-  $("dailyTotalBadge").textContent = `${calculateHours([...state.selectedSlots]).toFixed(1)} ore`;
   els.slotCount.textContent = String(state.selectedSlots.size);
   els.dayHours.textContent = (state.selectedSlots.size * 0.5).toFixed(2);
   renderMyDaySummary(ranges);
 }
 
-function calculateHours(slots) {
-  return slots.length * 0.5;
 function removeRange(range) {
   for (let m = timeToMinutes(range.start); m < timeToMinutes(range.end); m += 30) {
     state.selectedSlots.delete(minutesToTime(m));
@@ -379,13 +274,6 @@ function removeRange(range) {
   renderSelectedState();
 }
 
-function slotsToRanges(slots) {
-  const sorted = [...slots].map(timeToMinutes).sort((a, b) => a - b);
-  if (!sorted.length) return "-";
-
-  const ranges = [];
-  let start = sorted[0];
-  let previous = sorted[0];
 function addRangeFromInputs() {
   const start = els.rangeStart.value;
   const end = els.rangeEnd.value;
@@ -395,13 +283,6 @@ function addRangeFromInputs() {
   if (endM <= startM) return alert("L'orario di fine deve essere dopo l'inizio.");
   if (startM % 30 !== 0 || endM % 30 !== 0) return alert("Usa orari a mezz'ora (es. 08:00, 08:30).");
 
-  for (let i = 1; i <= sorted.length; i++) {
-    const current = sorted[i];
-    if (current !== previous + 30) {
-      ranges.push(`${minutesToTime(start)}-${minutesToTime(previous + 30)}`);
-      start = current;
-    }
-    previous = current;
   for (let m = startM; m < endM; m += 30) {
     state.selectedSlots.add(minutesToTime(m));
   }
@@ -418,25 +299,9 @@ async function loadSelectedDay() {
     const data = snap.data();
     state.selectedSlots = new Set(data.slots || []);
     renderSelectedState();
+  }
 }
 
-  return ranges.join(" · ");
-}
-
-function loadSelectedShift() {
-  const data = loadData();
-  const userId = selectedUserIdForWork();
-  const date = $("selectedDate").value;
-  const shift = getShift(data, userId, date);
-  state.selectedSlots = new Set(shift.slots || []);
-  renderSlots();
-  renderReports();
-
-  const user = getUserById(data, userId);
-  $("hoursTitle").textContent = state.currentUser.role === "admin"
-    ? `Orari di ${user?.name || "dipendente"}`
-    : "I miei orari";
-}
 async function saveSelectedDay() {
   if (!state.currentUser) return;
   const date = els.selectedDate.value;
@@ -444,71 +309,25 @@ async function saveSelectedDay() {
   const ranges = slotsToRanges(slots);
   const totalHours = slots.length * 0.5;
 
-function renderEmployees() {
-  const data = loadData();
-  const tbody = $("employeesTable");
-  const select = $("workUserSelect");
-  tbody.innerHTML = "";
-  select.innerHTML = "";
-
-  const employees = getEmployees(data);
-
-  employees.forEach((user) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${escapeHTML(user.name)}</strong></td>
-      <td>${escapeHTML(user.username)}</td>
-      <td>${Number(user.hourlyRate || 0).toFixed(2)}</td>
-      <td><button class="btn danger" data-delete-user="${user.id}">Elimina</button></td>
-    `;
-    tbody.appendChild(tr);
-    select.add(new Option(user.name, user.id));
-  });
   if (!date) return alert("Seleziona una data.");
 
-  if (!employees.length) {
-    tbody.innerHTML = `<tr><td colspan="4">Ancora nessun dipendente inserito.</td></tr>`;
-    select.add(new Option("Nessun dipendente", ""));
-  }
-}
-
-function escapeHTML(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
   const ref = doc(db, "workSessions", `${state.currentUser.id}_${date}`);
 
-function addEmployee() {
-  const data = loadData();
-  const name = $("employeeName").value.trim();
-  const username = $("employeeUsername").value.trim().toLowerCase();
-  const password = $("employeePassword").value.trim();
-  const hourlyRate = Number($("employeeRate").value || 0);
-  // Se non ci sono slot, non salvo una giornata a 0: elimino proprio il documento.
-  // Così un orario inserito per errore sparisce dai report e non ricompare al ricaricamento.
+  // Se non ci sono slot, elimino il documento: così il giorno sparisce dai report.
   if (slots.length === 0) {
     await deleteDoc(ref);
     setMsg(els.saveMsg, "Orario cancellato: giornata senza ore lavorate.", "success");
 
-  if (!name || !username || !password) {
-    setMessage($("employeeMessage"), "Compila nome, username e password.", "err");
     if (state.currentUser.role === "admin") {
       await loadAdminDayReport();
       await loadAdminMonthReport();
+      await loadAdminEmployeeMonthReport({ silent: true });
     }
     await loadMyReports();
     renderSelectedState();
-return;
-}
-
-  if (data.users.some((user) => user.username.toLowerCase() === username)) {
-    setMessage($("employeeMessage"), "Username già esistente.", "err");
     return;
   }
+
   const payload = {
     employeeId: state.currentUser.id,
     employeeName: state.currentUser.name,
@@ -519,35 +338,17 @@ return;
     updatedAt: serverTimestamp()
   };
 
-  data.users.push({
-    id: crypto.randomUUID(),
-    name,
-    username,
-    password,
-    role: "employee",
-    hourlyRate,
-  });
   await setDoc(ref, payload);
   setMsg(els.saveMsg, "Orari salvati correttamente.", "success");
 
-  saveData(data);
-  $("employeeName").value = "";
-  $("employeeUsername").value = "";
-  $("employeePassword").value = "";
-  setMessage($("employeeMessage"), "Dipendente aggiunto.", "ok");
-  renderEmployees();
-  loadSelectedShift();
   if (state.currentUser.role === "admin") {
     await loadAdminDayReport();
     await loadAdminMonthReport();
+    await loadAdminEmployeeMonthReport({ silent: true });
   }
   await loadMyReports();
 }
 
-function deleteEmployee(userId) {
-  const data = loadData();
-  const user = getUserById(data, userId);
-  if (!user) return;
 async function loadMyReports() {
   if (!state.currentUser) return;
   const snap = await getDocs(query(collection(db, "workSessions"), where("employeeId", "==", state.currentUser.id)));
@@ -555,77 +356,44 @@ async function loadMyReports() {
   let monthHours = 0;
   let totalHours = 0;
 
-  const ok = confirm(`Eliminare ${user.name}? Verranno eliminati anche i suoi orari salvati in locale.`);
-  if (!ok) return;
-
-  data.users = data.users.filter((item) => item.id !== userId);
-  Object.keys(data.shifts).forEach((key) => {
-    if (data.shifts[key].userId === userId) delete data.shifts[key];
   snap.forEach(d => {
     const data = d.data();
     totalHours += data.totalHours || 0;
     if (month && data.date?.startsWith(month)) monthHours += data.totalHours || 0;
-});
+  });
 
-  saveData(data);
-  renderEmployees();
-  loadSelectedShift();
   const rate = Number(state.currentUser.hourlyRate || 0);
   els.myMonthHours.textContent = monthHours.toFixed(2);
-  els.myMonthPay.textContent = `€ ${(monthHours * rate).toFixed(2)}`;
+  els.myMonthPay.textContent = formatEuro(monthHours * rate);
   els.myTotalHours.textContent = totalHours.toFixed(2);
-  els.myTotalPay.textContent = `€ ${(totalHours * rate).toFixed(2)}`;
+  els.myTotalPay.textContent = formatEuro(totalHours * rate);
 }
 
-function applyRange() {
-  const start = timeToMinutes($("startTime").value);
-  const end = timeToMinutes($("endTime").value);
-
-  if (end <= start) {
-    alert("L’orario di fine deve essere successivo all’orario di inizio.");
 function renderMyDaySummary(ranges = slotsToRanges([...state.selectedSlots])) {
   els.myDaySummary.innerHTML = "";
   if (!ranges.length) {
     els.myDaySummary.innerHTML = `<div class="summary-item"><strong>${els.selectedDate.value || 'Nessuna data'}</strong><small>Nessun orario registrato per il giorno selezionato.</small></div>`;
-return;
-}
-
-  for (let minute = start; minute < end; minute += 30) {
-    state.selectedSlots.add(minutesToTime(minute));
+    return;
   }
-
-  renderSlots();
-  renderReports();
   const total = ranges.reduce((s, r) => s + rangeHours(r), 0);
   const item = document.createElement("div");
   item.className = "summary-item";
   item.innerHTML = `
     <strong>${els.selectedDate.value}</strong>
-    <div class="big">${ranges.map(r => `${r.start}-${r.end}`).join(" • ")}</div>
+    <div class="big">${ranges.map(r => `${r.start} - ${r.end}`).join(" / ")}</div>
     <small>Totale giornata: ${total.toFixed(2)} ore</small>
   `;
   els.myDaySummary.appendChild(item);
 }
 
-function saveSelectedDay() {
-  const data = loadData();
-  const userId = selectedUserIdForWork();
-  const date = $("selectedDate").value;
 async function createEmployee() {
   const name = els.empName.value.trim();
   const username = els.empUsername.value.trim();
   const password = els.empPassword.value.trim();
   const hourlyRate = Number(els.empRate.value || 0);
 
-  if (!userId) {
-    setMessage($("saveMessage"), "Prima crea o seleziona un dipendente.", "err");
-    return;
-  }
   if (!name || !username || !password) return setMsg(els.createEmployeeMsg, "Compila nome, username e password.", "error");
 
-  const slots = [...state.selectedSlots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
-  data.shifts[shiftKey(userId, date)] = { userId, date, slots };
-  saveData(data);
   const exists = await getDocs(query(collection(db, "employees"), where("username", "==", username)));
   if (!exists.empty) return setMsg(els.createEmployeeMsg, "Username già presente.", "error");
 
@@ -639,8 +407,6 @@ async function createEmployee() {
     createdAt: serverTimestamp()
   });
 
-  setMessage($("saveMessage"), "Orari salvati.", "ok");
-  renderReports();
   els.empName.value = "";
   els.empUsername.value = "";
   els.empPassword.value = "";
@@ -659,8 +425,8 @@ async function loadEmployees() {
     item.className = "employee-item";
     item.innerHTML = `
       <div>
-        <strong>${emp.name}</strong>
-        <small>@${emp.username} • ${emp.role === 'admin' ? 'Admin' : 'Dipendente'} • € ${Number(emp.hourlyRate || 0).toFixed(2)}/h</small>
+        <strong>${escapeHTML(emp.name || "Senza nome")}</strong>
+        <small>@${escapeHTML(emp.username || "")} • ${emp.role === 'admin' ? 'Admin' : 'Dipendente'} • ${formatEuro(Number(emp.hourlyRate || 0))}/h</small>
       </div>
       ${emp.role === 'admin' ? '<span class="chip">Admin</span>' : '<button class="btn btn-light btn-sm" type="button">Elimina</button>'}
     `;
@@ -669,88 +435,64 @@ async function loadEmployees() {
       if (!confirm(`Eliminare ${emp.name}?`)) return;
       await deleteDoc(doc(db, "employees", emp.id));
       await loadEmployees();
+      await loadAdminMonthReport();
+      await loadAdminEmployeeMonthReport({ silent: true });
     });
     els.employeeList.appendChild(item);
   });
+
+  populateAdminEmployeeSelect();
 }
 
-function renderReports() {
-  const data = loadData();
-  const date = $("selectedDate").value;
-  const month = $("selectedMonth").value;
+function populateAdminEmployeeSelect() {
+  const previous = els.adminReportEmployee.value;
+  const employees = state.employees.filter(emp => emp.role !== "admin" && emp.active !== false);
+
+  els.adminReportEmployee.innerHTML = "";
+
+  if (!employees.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Nessun dipendente disponibile";
+    els.adminReportEmployee.appendChild(option);
+    return;
+  }
+
+  employees.forEach(emp => {
+    const option = document.createElement("option");
+    option.value = emp.id;
+    option.textContent = emp.name || emp.username || "Dipendente";
+    els.adminReportEmployee.appendChild(option);
+  });
+
+  const stillExists = employees.some(emp => emp.id === previous);
+  els.adminReportEmployee.value = stillExists ? previous : employees[0].id;
+}
+
 async function loadAdminDayReport() {
   if (!state.currentUser || state.currentUser.role !== "admin") return;
   const date = els.adminDay.value;
   const snap = await getDocs(query(collection(db, "workSessions"), where("date", "==", date)));
-  const items = snap.docs.map(d => d.data()).sort((a, b) => a.employeeName.localeCompare(b.employeeName));
+  const items = snap.docs.map(d => d.data()).sort((a, b) => String(a.employeeName || "").localeCompare(String(b.employeeName || "")));
   els.adminDayReport.innerHTML = "";
 
-  if (state.currentUser?.role === "admin") {
-    renderAdminDailyReport(data, date);
-    renderAdminMonthlyReport(data, month);
-  } else {
-    renderEmployeeDailyReport(data, state.currentUser.id, date);
-    renderEmployeeMonthlyReport(data, state.currentUser.id, month);
   if (!items.length) {
     els.adminDayReport.innerHTML = `<div class="report-item"><strong>Nessun dato</strong><small>Non ci sono orari salvati per ${date}.</small></div>`;
     return;
-}
-}
+  }
 
-function renderEmployeeDailyReport(data, userId, date) {
-  const user = getUserById(data, userId);
-  const shift = getShift(data, userId, date);
-  const hours = calculateHours(shift.slots || []);
-  const pay = hours * Number(user?.hourlyRate || 0);
-
-  $("dailyReport").innerHTML = `
-    <div class="report-list">
-      <div class="report-item">
-        <strong>${escapeHTML(user?.name || "Dipendente")}</strong>
-        <span>${date}</span>
-        <div class="hours">${hours.toFixed(1)} ore</div>
-        <p class="muted">Fasce: ${escapeHTML(slotsToRanges(shift.slots || []))}</p>
-        <p><strong>Totale stimato:</strong> € ${pay.toFixed(2)}</p>
-      </div>
-    </div>
-  `;
   items.forEach(item => {
     const div = document.createElement("div");
     div.className = "report-item";
     div.innerHTML = `
-      <strong>${item.employeeName}</strong>
-      <div class="big">${item.ranges?.map(r => `${r.start}-${r.end}`).join(" • ") || '-'}</div>
-      <small>${item.totalHours.toFixed(2)} ore</small>
+      <strong>${escapeHTML(item.employeeName || "Dipendente")}</strong>
+      <div class="big">${escapeHTML(formatRanges(item) || "-")}</div>
+      <small>${Number(item.totalHours || 0).toFixed(2)} ore</small>
     `;
     els.adminDayReport.appendChild(div);
   });
 }
 
-function renderEmployeeMonthlyReport(data, userId, month) {
-  const user = getUserById(data, userId);
-  const rows = Object.values(data.shifts)
-    .filter((shift) => shift.userId === userId && shift.date.startsWith(month))
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const total = rows.reduce((sum, shift) => sum + calculateHours(shift.slots || []), 0);
-  const pay = total * Number(user?.hourlyRate || 0);
-
-  $("monthlyReport").innerHTML = `
-    <div class="report-list">
-      <div class="report-item">
-        <strong>${month}</strong>
-        <div class="hours">${total.toFixed(1)} ore</div>
-        <p><strong>Totale stimato:</strong> € ${pay.toFixed(2)}</p>
-      </div>
-      ${rows.map((shift) => `
-        <div class="report-item">
-          <strong>${shift.date}</strong>
-          <span>${calculateHours(shift.slots || []).toFixed(1)} ore</span>
-          <p class="muted">${escapeHTML(slotsToRanges(shift.slots || []))}</p>
-        </div>
-      `).join("") || `<div class="report-item">Nessun orario salvato per questo mese.</div>`}
-    </div>
-  `;
-}
 async function loadAdminMonthReport() {
   if (!state.currentUser || state.currentUser.role !== "admin") return;
   const month = els.adminMonth.value;
@@ -758,103 +500,260 @@ async function loadAdminMonthReport() {
   const filtered = snap.docs.map(d => d.data()).filter(x => x.date?.startsWith(month));
   const map = new Map();
 
-function renderAdminDailyReport(data, date) {
-  const employees = getEmployees(data);
-  const rows = employees.map((user) => {
-    const shift = getShift(data, user.id, date);
-    const hours = calculateHours(shift.slots || []);
-    return { user, shift, hours, pay: hours * Number(user.hourlyRate || 0) };
   filtered.forEach(item => {
     if (!map.has(item.employeeId)) map.set(item.employeeId, { name: item.employeeName, hours: 0 });
     map.get(item.employeeId).hours += item.totalHours || 0;
-});
+  });
 
-  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
-  const totalPay = rows.reduce((sum, row) => sum + row.pay, 0);
-
-  $("dailyReport").innerHTML = `
-    <div class="report-item">
-      <strong>Totale giornata ${date}</strong>
-      <div class="hours">${totalHours.toFixed(1)} ore</div>
-      <p><strong>Totale paghe:</strong> € ${totalPay.toFixed(2)}</p>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Dipendente</th><th>Fasce</th><th>Ore</th><th>€</th></tr></thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr>
-              <td>${escapeHTML(row.user.name)}</td>
-              <td>${escapeHTML(slotsToRanges(row.shift.slots || []))}</td>
-              <td>${row.hours.toFixed(1)}</td>
-              <td>${row.pay.toFixed(2)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="4">Nessun dipendente.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
   els.adminMonthReport.innerHTML = "";
 
-function renderAdminMonthlyReport(data, month) {
-  const employees = getEmployees(data);
-  const rows = employees.map((user) => {
-    const shifts = Object.values(data.shifts).filter((shift) => shift.userId === user.id && shift.date.startsWith(month));
-    const hours = shifts.reduce((sum, shift) => sum + calculateHours(shift.slots || []), 0);
-    return { user, hours, pay: hours * Number(user.hourlyRate || 0) };
-  });
   if (!map.size) {
     els.adminMonthReport.innerHTML = `<div class="report-item"><strong>Nessun dato</strong><small>Non ci sono orari salvati per ${month}.</small></div>`;
     return;
   }
 
-  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
-  const totalPay = rows.reduce((sum, row) => sum + row.pay, 0);
-
-  $("monthlyReport").innerHTML = `
-    <div class="report-item">
-      <strong>Totale mese ${month}</strong>
-      <div class="hours">${totalHours.toFixed(1)} ore</div>
-      <p><strong>Totale paghe:</strong> € ${totalPay.toFixed(2)}</p>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Dipendente</th><th>Ore mese</th><th>€ mese</th></tr></thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr>
-              <td>${escapeHTML(row.user.name)}</td>
-              <td>${row.hours.toFixed(1)}</td>
-              <td>${row.pay.toFixed(2)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="3">Nessun dipendente.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
   [...map.entries()]
     .map(([id, v]) => ({ id, ...v }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
     .forEach(row => {
       const employee = state.employees.find(e => e.id === row.id);
       const rate = Number(employee?.hourlyRate || 0);
       const div = document.createElement("div");
       div.className = "report-item";
       div.innerHTML = `
-        <strong>${row.name}</strong>
+        <strong>${escapeHTML(row.name || "Dipendente")}</strong>
         <div class="big">${row.hours.toFixed(2)} ore</div>
-        <small>Compenso stimato: € ${(row.hours * rate).toFixed(2)}</small>
+        <small>Compenso stimato: ${formatEuro(row.hours * rate)}</small>
       `;
       els.adminMonthReport.appendChild(div);
     });
 }
 
-function login() {
-  const data = loadData();
-  const username = $("loginUsername").value.trim().toLowerCase();
-  const password = $("loginPassword").value.trim();
-  const user = data.users.find((item) => item.username.toLowerCase() === username && item.password === password);
+async function loadAdminEmployeeMonthReport(options = {}) {
+  if (!state.currentUser || state.currentUser.role !== "admin") return null;
+  const employeeId = els.adminReportEmployee.value;
+  const month = els.adminReportMonth.value;
+
+  if (!employeeId || !month) {
+    clearEmployeeMonthReport("Seleziona dipendente e mese.");
+    return null;
+  }
+
+  const employee = state.employees.find(emp => emp.id === employeeId);
+  if (!employee) {
+    clearEmployeeMonthReport("Dipendente non trovato.");
+    return null;
+  }
+
+  const rows = await buildEmployeeMonthRows(employeeId, month);
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
+  const daysWorked = rows.filter(row => row.hours > 0).length;
+  const rate = Number(employee.hourlyRate || 0);
+  const totalPay = totalHours * rate;
+
+  state.employeeMonthReport = {
+    employee,
+    month,
+    rows,
+    totalHours,
+    daysWorked,
+    totalPay
+  };
+
+  renderEmployeeMonthSummary(state.employeeMonthReport);
+  renderEmployeeMonthTable(rows);
+
+  if (!options.silent) {
+    setMsg(els.employeePdfMsg, "Report caricato.", "success");
+  }
+
+  return state.employeeMonthReport;
+}
+
+async function buildEmployeeMonthRows(employeeId, month) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const snap = await getDocs(query(collection(db, "workSessions"), where("employeeId", "==", employeeId)));
+  const sessionsByDate = new Map();
+
+  snap.docs
+    .map(d => d.data())
+    .filter(item => item.date?.startsWith(month))
+    .forEach(item => sessionsByDate.set(item.date, item));
+
+  const rows = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${month}-${String(day).padStart(2, "0")}`;
+    const session = sessionsByDate.get(date);
+    rows.push({
+      date,
+      dateLabel: formatDateIT(date),
+      weekday: formatWeekdayIT(date),
+      rangesText: session ? formatRanges(session) : "-",
+      hours: Number(session?.totalHours || 0),
+    });
+  }
+
+  return rows;
+}
+
+function renderEmployeeMonthSummary(report) {
+  els.employeeMonthSummary.innerHTML = `
+    <div class="stat-card">
+      <span>Dipendente</span>
+      <strong>${escapeHTML(report.employee.name || "Dipendente")}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Mese</span>
+      <strong>${formatMonthIT(report.month)}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Ore mese</span>
+      <strong>${report.totalHours.toFixed(2)}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Giorni lavorati</span>
+      <strong>${report.daysWorked}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Paga oraria</span>
+      <strong>${formatEuro(Number(report.employee.hourlyRate || 0))}</strong>
+    </div>
+    <div class="stat-card">
+      <span>Compenso stimato</span>
+      <strong>${formatEuro(report.totalPay)}</strong>
+    </div>
+  `;
+}
+
+function renderEmployeeMonthTable(rows) {
+  if (!rows.length) {
+    els.employeeMonthTable.innerHTML = `<tr><td colspan="4">Nessun giorno trovato.</td></tr>`;
+    return;
+  }
+
+  els.employeeMonthTable.innerHTML = rows.map(row => `
+    <tr class="${row.hours > 0 ? 'worked' : ''}">
+      <td>${escapeHTML(row.dateLabel)}</td>
+      <td>${escapeHTML(row.weekday)}</td>
+      <td>${escapeHTML(row.rangesText)}</td>
+      <td>${row.hours > 0 ? row.hours.toFixed(2) : '-'}</td>
+    </tr>
+  `).join("");
+}
+
+function clearEmployeeMonthReport(message = "") {
+  state.employeeMonthReport = null;
+  if (els.employeeMonthSummary) els.employeeMonthSummary.innerHTML = "";
+  if (els.employeeMonthTable) {
+    els.employeeMonthTable.innerHTML = `<tr><td colspan="4">Carica un report mensile.</td></tr>`;
+  }
+  if (message) setMsg(els.employeePdfMsg, message, "error");
+  else setMsg(els.employeePdfMsg, "");
+}
+
+async function downloadAdminEmployeeMonthPdf() {
+  if (!state.currentUser || state.currentUser.role !== "admin") return;
+
+  let report = state.employeeMonthReport;
+  const selectedEmployeeId = els.adminReportEmployee.value;
+  const selectedMonth = els.adminReportMonth.value;
+
+  if (!report || report.employee.id !== selectedEmployeeId || report.month !== selectedMonth) {
+    report = await loadAdminEmployeeMonthReport({ silent: true });
+  }
+
+  if (!report) return;
+
+  const JsPDF = window.jspdf?.jsPDF;
+  if (!JsPDF) {
+    setMsg(els.employeePdfMsg, "PDF non disponibile: controlla la connessione e ricarica la pagina.", "error");
+    return;
+  }
+
+  const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 12;
+  const tableWidth = pageWidth - margin * 2;
+  const colDate = 25;
+  const colDay = 34;
+  const colHours = 18;
+  const colRanges = tableWidth - colDate - colDay - colHours;
+  const lineHeight = 5;
+
+  let y = 16;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+  pdf.text("Report mensile orari", margin, y);
+
+  y += 8;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.text(`Dipendente: ${report.employee.name || "Dipendente"}`, margin, y);
+  y += 6;
+  pdf.text(`Mese: ${formatMonthIT(report.month)}`, margin, y);
+  y += 6;
+  pdf.text(`Ore mese: ${report.totalHours.toFixed(2)} - Giorni lavorati: ${report.daysWorked}`, margin, y);
+  y += 6;
+  pdf.text(`Paga oraria: ${formatEuro(Number(report.employee.hourlyRate || 0))} - Compenso stimato: ${formatEuro(report.totalPay)}`, margin, y);
+  y += 9;
+
+  drawPdfTableHeader();
+
+  report.rows.forEach(row => {
+    const rangesLines = pdf.splitTextToSize(row.rangesText, colRanges - 4);
+    const rowHeight = Math.max(8, rangesLines.length * lineHeight + 4);
+
+    if (y + rowHeight > pageHeight - 14) {
+      pdf.addPage();
+      y = 16;
+      drawPdfTableHeader();
+    }
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5);
+    pdf.rect(margin, y, tableWidth, rowHeight);
+    pdf.line(margin + colDate, y, margin + colDate, y + rowHeight);
+    pdf.line(margin + colDate + colDay, y, margin + colDate + colDay, y + rowHeight);
+    pdf.line(margin + colDate + colDay + colRanges, y, margin + colDate + colDay + colRanges, y + rowHeight);
+
+    pdf.text(row.dateLabel, margin + 2, y + 5);
+    pdf.text(row.weekday, margin + colDate + 2, y + 5);
+    pdf.text(rangesLines, margin + colDate + colDay + 2, y + 5);
+    pdf.text(row.hours > 0 ? row.hours.toFixed(2) : "-", margin + colDate + colDay + colRanges + 2, y + 5);
+
+    y += rowHeight;
+  });
+
+  const fileName = `report-${slugify(report.employee.name || "dipendente")}-${report.month}.pdf`;
+  pdf.save(fileName);
+  setMsg(els.employeePdfMsg, "PDF scaricato.", "success");
+
+  function drawPdfTableHeader() {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.5);
+    pdf.rect(margin, y, tableWidth, 8);
+    pdf.line(margin + colDate, y, margin + colDate, y + 8);
+    pdf.line(margin + colDate + colDay, y, margin + colDate + colDay, y + 8);
+    pdf.line(margin + colDate + colDay + colRanges, y, margin + colDate + colDay + colRanges, y + 8);
+    pdf.text("Data", margin + 2, y + 5);
+    pdf.text("Giorno", margin + colDate + 2, y + 5);
+    pdf.text("Orari", margin + colDate + colDay + 2, y + 5);
+    pdf.text("Ore", margin + colDate + colDay + colRanges + 2, y + 5);
+    y += 8;
+  }
+}
+
+function formatRanges(item) {
+  const ranges = Array.isArray(item?.ranges) && item.ranges.length
+    ? item.ranges
+    : slotsToRanges(item?.slots || []);
+
+  return ranges.map(r => `${r.start} - ${r.end}`).join(" / ");
+}
+
 function slotsToRanges(slots) {
   const sorted = slots.map(timeToMinutes).sort((a, b) => a - b);
   if (!sorted.length) return [];
@@ -862,9 +761,6 @@ function slotsToRanges(slots) {
   let start = sorted[0];
   let prev = sorted[0];
 
-  if (!user) {
-    setMessage($("loginMessage"), "Credenziali non valide.", "err");
-    return;
   for (let i = 1; i <= sorted.length; i++) {
     const cur = sorted[i];
     if (cur !== prev + 30) {
@@ -872,91 +768,72 @@ function slotsToRanges(slots) {
       start = cur;
     }
     prev = cur;
-}
-
-  state.currentUser = user;
-  $("loginView").classList.add("hidden");
-  $("appView").classList.remove("hidden");
-  $("logoutBtn").classList.remove("hidden");
-  $("currentUserName").textContent = user.name;
-  $("currentRole").textContent = user.role === "admin" ? "Amministratore" : "Dipendente";
-  $("adminPanel").classList.toggle("hidden", user.role !== "admin");
-  $("adminEmployeeSelector").classList.toggle("hidden", user.role !== "admin");
-
-  renderEmployees();
-  loadSelectedShift();
+  }
   return ranges;
 }
 
-function logout() {
-  state.currentUser = null;
-  state.selectedSlots = new Set();
-  $("loginView").classList.remove("hidden");
-  $("appView").classList.add("hidden");
-  $("logoutBtn").classList.add("hidden");
-  $("loginPassword").value = "";
-  setMessage($("loginMessage"), "");
 function rangeHours(range) {
   return (timeToMinutes(range.end) - timeToMinutes(range.start)) / 60;
 }
 
-function resetLocalData() {
-  const ok = confirm("Vuoi cancellare tutti i dati locali e ripartire da zero?");
-  if (!ok) return;
-  localStorage.removeItem(STORAGE_KEY);
-  loadData();
-  renderEmployees();
-  loadSelectedShift();
 function minutesToTime(minutes) {
   const h = String(Math.floor(minutes / 60)).padStart(2, "0");
   const m = String(minutes % 60).padStart(2, "0");
   return `${h}:${m}`;
 }
 
-function bindEvents() {
-  $("loginBtn").addEventListener("click", login);
-  $("loginPassword").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") login();
-  });
-  $("logoutBtn").addEventListener("click", logout);
-  $("addEmployeeBtn").addEventListener("click", addEmployee);
-  $("employeesTable").addEventListener("click", (event) => {
-    const id = event.target?.dataset?.deleteUser;
-    if (id) deleteEmployee(id);
-  });
-  $("selectedDate").addEventListener("change", loadSelectedShift);
-  $("selectedMonth").addEventListener("change", renderReports);
-  $("workUserSelect").addEventListener("change", loadSelectedShift);
-  $("applyRangeBtn").addEventListener("click", applyRange);
-  $("saveDayBtn").addEventListener("click", saveSelectedDay);
-  $("clearDayBtn").addEventListener("click", () => {
-    state.selectedSlots = new Set();
-    renderSlots();
-    renderReports();
-  });
-  $("selectAllBtn").addEventListener("click", () => {
-    state.selectedSlots = new Set(allSlotStarts());
-    renderSlots();
-    renderReports();
-  });
-  $("resetDemoBtn").addEventListener("click", resetLocalData);
 function timeToMinutes(time) {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
 
-function init() {
-  loadData();
-  $("selectedDate").value = todayISO();
-  $("selectedMonth").value = currentMonthISO();
-  buildTimeSelects();
-  buildSlotsGrid();
-  bindEvents();
 function dateToYMD(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-init();
+function formatDateIT(dateString) {
+  const [year, month, day] = dateString.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function formatWeekdayIT(dateString) {
+  const date = new Date(`${dateString}T12:00:00`);
+  const text = new Intl.DateTimeFormat("it-IT", { weekday: "long" }).format(date);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function formatMonthIT(monthString) {
+  const [year, month] = monthString.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+  const text = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(date);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function formatEuro(value) {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR"
+  }).format(Number(value || 0));
+}
+
+function slugify(text) {
+  return String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "report";
+}
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function setMsg(el, text, type = "") {
   el.textContent = text;
   el.className = `msg ${type}`.trim();

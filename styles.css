@@ -35,7 +35,7 @@ body {
   min-height: 100dvh;
 }
 
-button, input {
+button, input, select {
   font: inherit;
 }
 
@@ -205,7 +205,8 @@ button, input {
   margin-bottom: 6px;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   max-width: 100%;
   height: 48px;
@@ -216,7 +217,21 @@ button, input {
   color: var(--text);
 }
 
-.field input:focus {
+.field select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #6e6e78 50%),
+    linear-gradient(135deg, #6e6e78 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 21px,
+    calc(100% - 14px) 21px;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+.field input:focus,
+.field select:focus {
   outline: none;
   border-color: rgba(255,138,44,.6);
   box-shadow: 0 0 0 4px rgba(255,138,44,.12);
@@ -232,7 +247,7 @@ button, input {
   appearance: none;
   border: 0;
   border-radius: 16px;
-  height: 46px;
+  min-height: 46px;
   padding: 0 16px;
   font-weight: 700;
   cursor: pointer;
@@ -261,11 +276,11 @@ button, input {
 
 .btn-lg {
   width: 100%;
-  height: 52px;
+  min-height: 52px;
 }
 
 .btn-sm {
-  height: 38px;
+  min-height: 38px;
   padding-inline: 14px;
   border-radius: 12px;
 }
@@ -299,6 +314,7 @@ button, input {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px;
+  min-width: 0;
 }
 
 .stat-card span {
@@ -309,7 +325,9 @@ button, input {
 }
 
 .stat-card strong {
+  display: block;
   font-size: 1.1rem;
+  overflow-wrap: anywhere;
 }
 
 .slot-grid {
@@ -429,6 +447,64 @@ button, input {
   line-height: 1.5;
 }
 
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.month-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.month-report-table th,
+.month-report-table td {
+  padding: 11px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  font-size: .9rem;
+}
+
+.month-report-table th {
+  background: var(--soft);
+  color: #8d4205;
+  font-weight: 800;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.month-report-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.month-report-table tr.worked td {
+  background: #fffaf5;
+  font-weight: 600;
+}
+
+.month-report-table td:nth-child(3) {
+  min-width: 190px;
+}
+
+.month-report-table td:nth-child(4),
+.month-report-table th:nth-child(4) {
+  text-align: right;
+  white-space: nowrap;
+}
+
 code {
   background: #fff1e4;
   border-radius: 8px;
@@ -450,7 +526,8 @@ code {
 
   .field-grid,
   .stats-grid,
-  .single-mobile {
+  .single-mobile,
+  .action-row {
     grid-template-columns: 1fr;
   }
 
