@@ -211,3 +211,209 @@ input, select, textarea { font-size: 16px; }
   .employee-form-grid { grid-template-columns: 1fr; }
   .admin-module { overflow-y: auto; }
 }
+
+/* Correzioni anti-sforamento su smartphone */
+html,
+body,
+.app-shell,
+.app-view,
+.app-main,
+.tab-panel,
+.card,
+.work-card,
+.fill-card,
+.admin-module-wrap,
+.admin-module,
+.modal-card {
+  max-width: 100%;
+  min-width: 0;
+}
+
+body,
+.app-shell,
+.app-view,
+.app-main,
+.tab-panel {
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+button,
+.btn,
+.action-card,
+.tab-btn,
+.summary-item,
+.report-item,
+.employee-item,
+.range-item,
+.stat-card,
+.msg,
+.helper,
+.modal-head,
+.card-title-row {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.btn,
+.action-card,
+.tab-btn {
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.app-header > *,
+.user-block > *,
+.header-actions > *,
+.card-title-row > *,
+.report-filter-row > *,
+.time-entry-grid > *,
+.field-grid > *,
+.day-summary-row > *,
+.quick-actions > *,
+.action-row > *,
+.stats-grid > *,
+.bottom-nav > *,
+.modal-head > *,
+.modal-footer > * {
+  min-width: 0;
+}
+
+.user-block {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.header-actions {
+  flex: 0 0 auto;
+}
+
+.user-block strong {
+  max-width: 100%;
+}
+
+.action-card > span:last-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.action-card strong,
+.tab-btn strong,
+.card-title-row h2,
+.modal-head h2 {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.range-item {
+  max-width: 100%;
+}
+
+.range-main {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.range-main strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.employee-item > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.employee-item strong,
+.employee-item small,
+.report-item strong,
+.report-item small,
+.summary-item strong,
+.summary-item small,
+.summary-item .big,
+.report-item .big {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.field input,
+.field select,
+.field textarea {
+  display: block;
+  min-width: 0;
+}
+
+.field select {
+  text-overflow: ellipsis;
+}
+
+.table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.month-report-table {
+  max-width: none;
+}
+
+@media (max-width: 430px) {
+  .app-header {
+    padding-inline: 9px;
+  }
+
+  .app-main {
+    padding-inline: 7px;
+  }
+
+  .user-block strong {
+    max-width: calc(100vw - 118px);
+  }
+
+  .card-title-row h2,
+  .modal-head h2 {
+    font-size: .98rem;
+  }
+
+  .action-card {
+    padding-inline: 7px;
+  }
+
+  .action-card strong {
+    font-size: .78rem;
+  }
+
+  .month-report-table {
+    min-width: 430px;
+  }
+}
+
+@media (max-width: 340px) {
+  .quick-actions,
+  .action-row {
+    gap: 5px;
+  }
+
+  .action-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .action-card strong,
+  .btn {
+    font-size: .74rem;
+  }
+}
