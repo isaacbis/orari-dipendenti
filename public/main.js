@@ -38,9 +38,16 @@ const state = {
   employeeMonthReport: null,
   personalVoiceDraft: null,
   adminVoiceDraft: null,
+  loadingDay: false,
+  saveTimer: null,
+  saveChain: Promise.resolve(),
+  saveVersion: 0,
+  activeRecognition: null,
+  activeVoiceButton: null
 };
 
 const $ = (id) => document.getElementById(id);
+const on = (element, event, handler) => element?.addEventListener(event, handler);
 
 const els = {
   loginView: $("loginView"),
@@ -53,6 +60,7 @@ const els = {
   welcomeName: $("welcomeName"),
   roleBadge: $("roleBadge"),
   adminTabBtn: $("adminTabBtn"),
+  bottomNav: $("bottomNav"),
   selectedDate: $("selectedDate"),
   rangeStart: $("rangeStart"),
   rangeEnd: $("rangeEnd"),
@@ -62,8 +70,12 @@ const els = {
   slotGrid: $("slotGrid"),
   clearSlotsBtn: $("clearSlotsBtn"),
   selectedRanges: $("selectedRanges"),
-  saveDayBtn: $("saveDayBtn"),
   saveMsg: $("saveMsg"),
+  autoSaveBadge: $("autoSaveBadge"),
+  openQuickSlotsBtn: $("openQuickSlotsBtn"),
+  quickSlotsModal: $("quickSlotsModal"),
+  closeQuickSlotsBtn: $("closeQuickSlotsBtn"),
+  doneQuickSlotsBtn: $("doneQuickSlotsBtn"),
   reportMonth: $("reportMonth"),
   loadMyReportBtn: $("loadMyReportBtn"),
   myMonthHours: $("myMonthHours"),
@@ -91,11 +103,14 @@ const els = {
   employeePdfMsg: $("employeePdfMsg"),
   employeeMonthSummary: $("employeeMonthSummary"),
   employeeMonthTable: $("employeeMonthTable"),
+  adminModuleSelect: $("adminModuleSelect"),
+  personalVoiceModal: $("personalVoiceModal"),
+  openVoiceModalBtn: $("openVoiceModalBtn"),
+  closeVoiceModalBtn: $("closeVoiceModalBtn"),
   personalVoiceDate: $("personalVoiceDate"),
   personalVoiceText: $("personalVoiceText"),
   startPersonalVoiceBtn: $("startPersonalVoiceBtn"),
   parsePersonalVoiceBtn: $("parsePersonalVoiceBtn"),
-  savePersonalVoiceBtn: $("savePersonalVoiceBtn"),
   personalVoiceMsg: $("personalVoiceMsg"),
   personalVoicePreview: $("personalVoicePreview"),
   voiceEmployee: $("voiceEmployee"),
@@ -103,9 +118,8 @@ const els = {
   voiceText: $("voiceText"),
   startVoiceBtn: $("startVoiceBtn"),
   parseVoiceBtn: $("parseVoiceBtn"),
-  saveVoiceBtn: $("saveVoiceBtn"),
   voiceMsg: $("voiceMsg"),
-  voicePreview: $("voicePreview"),
+  voicePreview: $("voicePreview")
 };
 
 init();
@@ -114,51 +128,131 @@ async function init() {
   setDefaultDates();
   bindEvents();
   renderSlotGrid();
-  await ensureAdminExists();
+  markSaveStatus("Salvato", "saved");
+  try {
+    await ensureAdminExists();
+  } catch (error) {
+    console.error("Impossibile verificare l'account admin:", error);
+  }
 }
 
 function bindEvents() {
-  els.loginBtn.addEventListener("click", handleLogin);
-  els.loginPassword.addEventListener("keydown", (event) => {
+  on(els.loginBtn, "click", handleLogin);
+  on(els.loginPassword, "keydown", (event) => {
     if (event.key === "Enter") handleLogin();
   });
-  els.logoutBtn.addEventListener("click", logout);
-  els.selectedDate.addEventListener("change", loadSelectedDay);
-  els.addRangeBtn.addEventListener("click", addRangeFromInputs);
-  els.clearSlotsBtn.addEventListener("click", clearSelection);
-  els.saveDayBtn.addEventListener("click", saveSelectedDay);
-  els.loadMyReportBtn.addEventListener("click", loadMyReports);
-  els.createEmployeeBtn.addEventListener("click", createEmployee);
-  els.loadAdminDayBtn.addEventListener("click", loadAdminDayReport);
-  els.loadAdminMonthBtn.addEventListener("click", loadAdminMonthReport);
-  els.loadEmployeeMonthBtn.addEventListener("click", loadAdminEmployeeMonthReport);
-  els.downloadEmployeePdfBtn.addEventListener("click", downloadAdminEmployeeMonthPdf);
-  els.adminReportEmployee.addEventListener("change", clearEmployeeMonthReport);
-  els.adminReportMonth.addEventListener("change", clearEmployeeMonthReport);
+  on(els.logoutBtn, "click", logout);
 
-  els.startPersonalVoiceBtn.addEventListener("click", () => startVoiceDictation(els.personalVoiceText, els.personalVoiceMsg, parsePersonalVoice));
-  els.parsePersonalVoiceBtn.addEventListener("click", parsePersonalVoice);
-  els.savePersonalVoiceBtn.addEventListener("click", savePersonalVoiceDraft);
-  els.personalVoiceText.addEventListener("input", () => setMsg(els.personalVoiceMsg, ""));
+  on(els.selectedDate, "change", async () => {
+    cancelPendingAutoSave();
+    els.personalVoiceDate.value = els.selectedDate.value;
+    await loadSelectedDay();
+  });
+  on(els.addRangeBtn, "click", addRangeFromInputs);
+  on(els.clearSlotsBtn, "click", () => clearSelection({ save: true, ask: true }));
 
-  els.startVoiceBtn.addEventListener("click", () => startVoiceDictation(els.voiceText, els.voiceMsg, parseAdminVoice));
-  els.parseVoiceBtn.addEventListener("click", parseAdminVoice);
-  els.saveVoiceBtn.addEventListener("click", saveAdminVoiceDraft);
-  els.voiceText.addEventListener("input", () => setMsg(els.voiceMsg, ""));
-  els.voiceEmployee.addEventListener("change", () => { state.adminVoiceDraft = null; renderVoiceEmpty(els.voicePreview, "Nessuna anteprima", "Detta o scrivi gli orari del dipendente scelto."); });
-  els.voiceDate.addEventListener("change", () => { state.adminVoiceDraft = null; });
-  els.personalVoiceDate.addEventListener("change", () => { state.personalVoiceDraft = null; });
+  on(els.loadMyReportBtn, "click", loadMyReports);
+  on(els.reportMonth, "change", loadMyReports);
+  on(els.createEmployeeBtn, "click", createEmployee);
+  on(els.loadAdminDayBtn, "click", loadAdminDayReport);
+  on(els.loadAdminMonthBtn, "click", loadAdminMonthReport);
+  on(els.loadEmployeeMonthBtn, "click", loadAdminEmployeeMonthReport);
+  on(els.downloadEmployeePdfBtn, "click", downloadAdminEmployeeMonthPdf);
+  on(els.adminReportEmployee, "change", clearEmployeeMonthReport);
+  on(els.adminReportMonth, "change", clearEmployeeMonthReport);
 
-  document.querySelectorAll(".tab-btn").forEach(btn => {
+  on(els.openQuickSlotsBtn, "click", () => openModal(els.quickSlotsModal));
+  on(els.closeQuickSlotsBtn, "click", () => closeModal(els.quickSlotsModal));
+  on(els.doneQuickSlotsBtn, "click", () => closeModal(els.quickSlotsModal));
+  on(els.openVoiceModalBtn, "click", () => {
+    els.personalVoiceDate.value = els.selectedDate.value || els.personalVoiceDate.value;
+    openModal(els.personalVoiceModal);
+  });
+  on(els.closeVoiceModalBtn, "click", () => closeModal(els.personalVoiceModal));
+
+  on(els.quickSlotsModal, "click", (event) => {
+    if (event.target === els.quickSlotsModal) closeModal(els.quickSlotsModal);
+  });
+  on(els.personalVoiceModal, "click", (event) => {
+    if (event.target === els.personalVoiceModal) closeModal(els.personalVoiceModal);
+  });
+
+  on(els.startPersonalVoiceBtn, "click", () => startVoiceDictation({
+    textarea: els.personalVoiceText,
+    msgEl: els.personalVoiceMsg,
+    button: els.startPersonalVoiceBtn,
+    onFinal: parseAndSavePersonalVoice
+  }));
+  on(els.parsePersonalVoiceBtn, "click", parseAndSavePersonalVoice);
+  on(els.personalVoiceText, "input", () => {
+    state.personalVoiceDraft = null;
+    setMsg(els.personalVoiceMsg, "");
+  });
+  on(els.personalVoiceDate, "change", () => { state.personalVoiceDraft = null; });
+
+  on(els.startVoiceBtn, "click", () => startVoiceDictation({
+    textarea: els.voiceText,
+    msgEl: els.voiceMsg,
+    button: els.startVoiceBtn,
+    onFinal: parseAndSaveAdminVoice
+  }));
+  on(els.parseVoiceBtn, "click", parseAndSaveAdminVoice);
+  on(els.voiceText, "input", () => {
+    state.adminVoiceDraft = null;
+    setMsg(els.voiceMsg, "");
+  });
+  on(els.voiceEmployee, "change", () => {
+    state.adminVoiceDraft = null;
+    renderVoiceEmpty(els.voicePreview, "Nessun orario", "Detta o scrivi gli orari del dipendente scelto.");
+  });
+  on(els.voiceDate, "change", () => { state.adminVoiceDraft = null; });
+
+  on(els.adminModuleSelect, "change", () => activateAdminModule(els.adminModuleSelect.value));
+
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => activateTab(btn.dataset.tab, btn));
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    closeModal(els.quickSlotsModal);
+    closeModal(els.personalVoiceModal);
+    stopActiveRecognition();
   });
 }
 
 function activateTab(tabId, btn) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-  btn.classList.add("active");
-  $(tabId).classList.add("active");
+  document.querySelectorAll(".tab-btn").forEach((button) => button.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
+  btn?.classList.add("active");
+  $(tabId)?.classList.add("active");
+
+  if (tabId === "tabReports") loadMyReports();
+  if (tabId === "tabAdmin" && state.currentUser?.role === "admin") {
+    activateAdminModule(els.adminModuleSelect.value || "adminVoiceModule");
+  }
+}
+
+function activateAdminModule(moduleId) {
+  document.querySelectorAll(".admin-module").forEach((module) => module.classList.remove("active"));
+  $(moduleId)?.classList.add("active");
+
+  if (moduleId === "adminDayModule") loadAdminDayReport();
+  if (moduleId === "adminMonthModule") loadAdminMonthReport();
+  if (moduleId === "adminPdfModule") loadAdminEmployeeMonthReport({ silent: true });
+}
+
+function openModal(modal) {
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeModal(modal) {
+  if (!modal || modal.classList.contains("hidden")) return;
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
+  stopActiveRecognition();
 }
 
 async function ensureAdminExists() {
@@ -182,36 +276,49 @@ async function handleLogin() {
   const password = els.loginPassword.value.trim();
   if (!username || !password) return setMsg(els.loginMsg, "Inserisci username e password.", "error");
 
-  const q = query(collection(db, "employees"), where("username", "==", username));
-  const snap = await getDocs(q);
-  if (snap.empty) return setMsg(els.loginMsg, "Credenziali non valide.", "error");
+  els.loginBtn.disabled = true;
+  els.loginBtn.textContent = "Accesso...";
 
-  const docSnap = snap.docs.find(d => {
-    const data = d.data();
-    return data.password === password && data.active === true;
-  });
-  if (!docSnap) return setMsg(els.loginMsg, "Credenziali non valide.", "error");
+  try {
+    const q = query(collection(db, "employees"), where("username", "==", username));
+    const snap = await getDocs(q);
+    if (snap.empty) throw new Error("Credenziali non valide.");
 
-  state.currentUser = { id: docSnap.id, ...docSnap.data() };
-  els.welcomeName.textContent = state.currentUser.name;
-  els.roleBadge.textContent = state.currentUser.role === "admin" ? "Admin" : "Dipendente";
-  els.adminTabBtn.classList.toggle("hidden", state.currentUser.role !== "admin");
-  els.loginView.classList.add("hidden");
-  els.appView.classList.remove("hidden");
-  setMsg(els.loginMsg, "");
+    const docSnap = snap.docs.find((item) => {
+      const data = item.data();
+      return data.password === password && data.active === true;
+    });
+    if (!docSnap) throw new Error("Credenziali non valide.");
 
-  if (state.currentUser.role === "admin") {
-    await loadEmployees();
-    await loadAdminDayReport();
-    await loadAdminMonthReport();
-    await loadAdminEmployeeMonthReport({ silent: true });
+    state.currentUser = { id: docSnap.id, ...docSnap.data() };
+    els.welcomeName.textContent = state.currentUser.name || state.currentUser.username;
+    els.roleBadge.textContent = state.currentUser.role === "admin" ? "Admin" : "Dipendente";
+    els.adminTabBtn.classList.toggle("hidden", state.currentUser.role !== "admin");
+    els.bottomNav?.classList.toggle("admin-enabled", state.currentUser.role === "admin");
+    els.loginView.classList.add("hidden");
+    els.appView.classList.remove("hidden");
+    setMsg(els.loginMsg, "");
+
+    if (state.currentUser.role === "admin") {
+      await loadEmployees();
+      await loadAdminDayReport();
+      await loadAdminMonthReport();
+      await loadAdminEmployeeMonthReport({ silent: true });
+    }
+
+    await loadSelectedDay();
+    await loadMyReports();
+  } catch (error) {
+    setMsg(els.loginMsg, error.message || "Accesso non riuscito.", "error");
+  } finally {
+    els.loginBtn.disabled = false;
+    els.loginBtn.textContent = "Entra";
   }
-
-  await loadSelectedDay();
-  await loadMyReports();
 }
 
 function logout() {
+  cancelPendingAutoSave();
+  stopActiveRecognition();
   state.currentUser = null;
   state.selectedSlots = new Set();
   state.employeeMonthReport = null;
@@ -223,6 +330,9 @@ function logout() {
   els.loginView.classList.remove("hidden");
   els.loginUsername.value = "";
   els.loginPassword.value = "";
+  els.bottomNav?.classList.remove("admin-enabled");
+  closeModal(els.quickSlotsModal);
+  closeModal(els.personalVoiceModal);
   activateTab("tabSchedule", document.querySelector('[data-tab="tabSchedule"]'));
 }
 
@@ -241,17 +351,18 @@ function setDefaultDates() {
 
 function generateSlots() {
   const list = [];
-  for (let m = 0; m < 24 * 60; m += 30) list.push(minutesToTime(m));
+  for (let minutes = 0; minutes < 24 * 60; minutes += 30) list.push(minutesToTime(minutes));
   return list;
 }
 
 function renderSlotGrid() {
   els.slotGrid.innerHTML = "";
-  state.slots.forEach(time => {
+  state.slots.forEach((time) => {
     const btn = document.createElement("button");
     btn.className = "slot-btn";
     btn.textContent = time;
     btn.type = "button";
+    btn.setAttribute("aria-label", `Orario ${time}`);
     btn.addEventListener("click", () => toggleSlot(time));
     els.slotGrid.appendChild(btn);
   });
@@ -262,26 +373,30 @@ function toggleSlot(time) {
   if (state.selectedSlots.has(time)) state.selectedSlots.delete(time);
   else state.selectedSlots.add(time);
   renderSelectedState();
+  queueAutoSave(500);
 }
 
-function clearSelection() {
+function clearSelection(options = {}) {
+  const { save = false, ask = false } = options;
+  if (ask && state.selectedSlots.size && !confirm("Svuotare tutti gli orari del giorno selezionato?")) return;
   state.selectedSlots = new Set();
   renderSelectedState();
+  if (save) queueAutoSave(100);
 }
 
 function renderSelectedState() {
   const buttons = [...els.slotGrid.querySelectorAll(".slot-btn")];
-  buttons.forEach((btn, i) => {
-    const t = state.slots[i];
-    btn.classList.toggle("active", state.selectedSlots.has(t));
+  buttons.forEach((btn, index) => {
+    btn.classList.toggle("active", state.selectedSlots.has(state.slots[index]));
   });
 
   const ranges = slotsToRanges([...state.selectedSlots]);
   els.selectedRanges.innerHTML = "";
+
   if (!ranges.length) {
-    els.selectedRanges.innerHTML = `<div class="range-item"><div class="range-main"><strong>Nessuna fascia selezionata</strong><small>Tocca gli slot o usa inizio/fine.</small></div></div>`;
+    els.selectedRanges.innerHTML = '<div class="empty-range">Nessuna fascia inserita.</div>';
   } else {
-    ranges.forEach(range => {
+    ranges.forEach((range) => {
       const div = document.createElement("div");
       div.className = "range-item";
       div.innerHTML = `
@@ -289,7 +404,7 @@ function renderSelectedState() {
           <strong>${range.start} - ${range.end}</strong>
           <small>${rangeHours(range).toFixed(2)} ore</small>
         </div>
-        <button class="btn btn-light btn-sm" type="button">Rimuovi</button>
+        <button class="range-remove" type="button" aria-label="Rimuovi ${range.start} - ${range.end}">×</button>
       `;
       div.querySelector("button").addEventListener("click", () => removeRange(range));
       els.selectedRanges.appendChild(div);
@@ -302,87 +417,132 @@ function renderSelectedState() {
 }
 
 function removeRange(range) {
-  for (let m = timeToMinutes(range.start); m < timeToMinutes(range.end); m += 30) {
-    state.selectedSlots.delete(minutesToTime(m));
+  for (let minutes = timeToMinutes(range.start); minutes < timeToMinutes(range.end); minutes += 30) {
+    state.selectedSlots.delete(minutesToTime(minutes));
   }
   renderSelectedState();
+  queueAutoSave(150);
 }
 
 function addRangeFromInputs() {
   const start = els.rangeStart.value;
   const end = els.rangeEnd.value;
-  if (!start || !end) return alert("Inserisci ora di inizio e fine.");
+  if (!start || !end) return setMsg(els.saveMsg, "Inserisci inizio e fine.", "error");
+
   const startM = timeToMinutes(start);
   const endM = timeToMinutes(end);
-  if (endM <= startM) return alert("L'orario di fine deve essere dopo l'inizio.");
-  if (startM % 30 !== 0 || endM % 30 !== 0) return alert("Usa orari a mezz'ora (es. 08:00, 08:30).");
+  if (endM <= startM) return setMsg(els.saveMsg, "La fine deve essere successiva all'inizio.", "error");
+  if (startM % 30 !== 0 || endM % 30 !== 0) return setMsg(els.saveMsg, "Usa orari a mezz'ora.", "error");
 
-  for (let m = startM; m < endM; m += 30) {
-    state.selectedSlots.add(minutesToTime(m));
+  for (let minutes = startM; minutes < endM; minutes += 30) {
+    state.selectedSlots.add(minutesToTime(minutes));
   }
+
+  els.rangeStart.value = "";
+  els.rangeEnd.value = "";
   renderSelectedState();
+  queueAutoSave(80);
 }
 
-async function loadSelectedDay() {
-  if (!state.currentUser) return;
-  clearSelection();
-  const id = `${state.currentUser.id}_${els.selectedDate.value}`;
-  const ref = doc(db, "workSessions", id);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data();
-    state.selectedSlots = new Set(data.slots || []);
-    renderSelectedState();
-  }
+function cancelPendingAutoSave() {
+  if (state.saveTimer) clearTimeout(state.saveTimer);
+  state.saveTimer = null;
 }
 
-async function saveSelectedDay() {
-  if (!state.currentUser) return;
-  const date = els.selectedDate.value;
-  const slots = [...state.selectedSlots].sort();
-  const ranges = slotsToRanges(slots);
-  const totalHours = slots.length * 0.5;
+function queueAutoSave(delay = 350) {
+  if (!state.currentUser || state.loadingDay) return;
+  cancelPendingAutoSave();
 
-  if (!date) return alert("Seleziona una data.");
+  const snapshot = {
+    version: ++state.saveVersion,
+    user: { ...state.currentUser },
+    date: els.selectedDate.value,
+    slots: [...state.selectedSlots].sort()
+  };
 
-  const ref = doc(db, "workSessions", `${state.currentUser.id}_${date}`);
+  markSaveStatus("Salvataggio...", "saving");
+  setMsg(els.saveMsg, "Salvataggio automatico in corso...");
 
-  // Se non ci sono slot, elimino il documento: così il giorno sparisce dai report.
-  if (slots.length === 0) {
-    await deleteDoc(ref);
-    setMsg(els.saveMsg, "Orario cancellato: giornata senza ore lavorate.", "success");
+  state.saveTimer = setTimeout(() => {
+    state.saveTimer = null;
+    state.saveChain = state.saveChain
+      .catch(() => {})
+      .then(() => persistDaySnapshot(snapshot));
+  }, delay);
+}
 
-    if (state.currentUser.role === "admin") {
+async function persistDaySnapshot(snapshot) {
+  if (!snapshot.user?.id || !snapshot.date) return;
+
+  const ranges = slotsToRanges(snapshot.slots);
+  const totalHours = snapshot.slots.length * 0.5;
+  const ref = doc(db, "workSessions", `${snapshot.user.id}_${snapshot.date}`);
+
+  try {
+    if (!snapshot.slots.length) {
+      await deleteDoc(ref);
+    } else {
+      await setDoc(ref, {
+        employeeId: snapshot.user.id,
+        employeeName: snapshot.user.name || snapshot.user.username || "Dipendente",
+        date: snapshot.date,
+        slots: snapshot.slots,
+        ranges,
+        totalHours,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    if (snapshot.version === state.saveVersion) {
+      markSaveStatus("Salvato", "saved");
+      setMsg(els.saveMsg, snapshot.slots.length ? "Orari salvati automaticamente." : "Giornata svuotata e salvata.", "success");
+    }
+
+    await loadMyReports();
+    if (snapshot.user.role === "admin") {
       await loadAdminDayReport();
       await loadAdminMonthReport();
       await loadAdminEmployeeMonthReport({ silent: true });
     }
-    await loadMyReports();
-    renderSelectedState();
-    return;
+  } catch (error) {
+    console.error(error);
+    if (snapshot.version === state.saveVersion) {
+      markSaveStatus("Errore", "error");
+      setMsg(els.saveMsg, "Salvataggio non riuscito. Controlla la connessione e riprova.", "error");
+    }
   }
-
-  const payload = {
-    employeeId: state.currentUser.id,
-    employeeName: state.currentUser.name,
-    date,
-    slots,
-    ranges,
-    totalHours,
-    updatedAt: serverTimestamp()
-  };
-
-  await setDoc(ref, payload);
-  setMsg(els.saveMsg, "Orari salvati correttamente.", "success");
-
-  if (state.currentUser.role === "admin") {
-    await loadAdminDayReport();
-    await loadAdminMonthReport();
-    await loadAdminEmployeeMonthReport({ silent: true });
-  }
-  await loadMyReports();
 }
 
+function markSaveStatus(text, type) {
+  if (!els.autoSaveBadge) return;
+  els.autoSaveBadge.textContent = text;
+  els.autoSaveBadge.className = `save-badge ${type}`;
+}
+
+async function loadSelectedDay() {
+  if (!state.currentUser || !els.selectedDate.value) return;
+  const requestedDate = els.selectedDate.value;
+  state.loadingDay = true;
+  markSaveStatus("Caricamento...", "saving");
+  state.selectedSlots = new Set();
+  renderSelectedState();
+
+  try {
+    const ref = doc(db, "workSessions", `${state.currentUser.id}_${requestedDate}`);
+    const snap = await getDoc(ref);
+    if (els.selectedDate.value !== requestedDate) return;
+    state.selectedSlots = new Set(snap.exists() ? (snap.data().slots || []) : []);
+    renderSelectedState();
+    markSaveStatus("Salvato", "saved");
+    setMsg(els.saveMsg, snap.exists() ? "Orario caricato." : "Nessun orario per questa data.");
+  } catch (error) {
+    console.error(error);
+    markSaveStatus("Errore", "error");
+    setMsg(els.saveMsg, "Non riesco a caricare la giornata.", "error");
+  } finally {
+    state.loadingDay = false;
+  }
+}
 
 async function saveWorkSessionForEmployee(employee, date, slots) {
   const cleanSlots = [...new Set(slots)].sort();
@@ -407,7 +567,7 @@ async function saveWorkSessionForEmployee(employee, date, slots) {
 }
 
 function parsePersonalVoice() {
-  if (!state.currentUser) return;
+  if (!state.currentUser) return null;
   const text = els.personalVoiceText.value.trim();
   const baseDate = els.personalVoiceDate.value || els.selectedDate.value || dateToYMD(new Date());
 
@@ -418,47 +578,45 @@ function parsePersonalVoice() {
       employee: state.currentUser,
       allowEmployeeFromText: false
     });
-
     state.personalVoiceDraft = draft;
     renderVoicePreview(els.personalVoicePreview, draft);
-    setMsg(els.personalVoiceMsg, draft.shouldSave ? "Orari riconosciuti. Hai detto anche salva: puoi confermare o verranno salvati dalla dettatura." : "Anteprima pronta. Controlla e salva.", "success");
     return draft;
   } catch (error) {
     state.personalVoiceDraft = null;
-    renderVoiceEmpty(els.personalVoicePreview, "Nessuna anteprima", "Non ho riconosciuto bene gli orari.");
+    renderVoiceEmpty(els.personalVoicePreview, "Nessun orario", "Non ho riconosciuto bene la frase.");
     setMsg(els.personalVoiceMsg, error.message, "error");
     return null;
   }
 }
 
-async function savePersonalVoiceDraft() {
-  if (!state.currentUser) return;
-  const draft = state.personalVoiceDraft || parsePersonalVoice();
+async function parseAndSavePersonalVoice() {
+  const draft = parsePersonalVoice();
   if (!draft) return;
+  await savePersonalVoiceDraft(draft);
+}
 
+async function savePersonalVoiceDraft(draft = state.personalVoiceDraft || parsePersonalVoice()) {
+  if (!state.currentUser || !draft) return;
   try {
+    setMsg(els.personalVoiceMsg, "Salvataggio in corso...");
     await saveVoiceDraft(draft);
     const last = draft.days[draft.days.length - 1];
     els.selectedDate.value = last.date;
+    els.personalVoiceDate.value = last.date;
     els.reportMonth.value = last.date.slice(0, 7);
     state.selectedSlots = new Set(last.slots);
     renderSelectedState();
-    await loadSelectedDay();
+    markSaveStatus("Salvato", "saved");
     await loadMyReports();
-    if (state.currentUser.role === "admin") {
-      await loadAdminDayReport();
-      await loadAdminMonthReport();
-      await loadAdminEmployeeMonthReport({ silent: true });
-    }
-    setMsg(els.personalVoiceMsg, `Salvato: ${draft.days.length} ${draft.days.length === 1 ? "giorno" : "giorni"}.`, "success");
+    setMsg(els.personalVoiceMsg, `Salvato automaticamente: ${formatRanges({ ranges: last.ranges })}.`, "success");
   } catch (error) {
-    setMsg(els.personalVoiceMsg, error.message, "error");
+    setMsg(els.personalVoiceMsg, error.message || "Salvataggio non riuscito.", "error");
   }
 }
 
 function parseAdminVoice() {
   if (!state.currentUser || state.currentUser.role !== "admin") return null;
-  const selectedEmployee = state.employees.find(emp => emp.id === els.voiceEmployee.value);
+  const selectedEmployee = state.employees.find((employee) => employee.id === els.voiceEmployee.value);
   const text = els.voiceText.value.trim();
   const baseDate = els.voiceDate.value || dateToYMD(new Date());
 
@@ -467,31 +625,31 @@ function parseAdminVoice() {
       text,
       baseDate,
       employee: selectedEmployee,
-      employees: state.employees.filter(emp => emp.role !== "admin" && emp.active !== false),
+      employees: state.employees.filter((employee) => employee.role !== "admin" && employee.active !== false),
       allowEmployeeFromText: true
     });
-
     state.adminVoiceDraft = draft;
-    if (draft.employee?.id && draft.employee.id !== els.voiceEmployee.value) {
-      els.voiceEmployee.value = draft.employee.id;
-    }
+    if (draft.employee?.id) els.voiceEmployee.value = draft.employee.id;
     renderVoicePreview(els.voicePreview, draft);
-    setMsg(els.voiceMsg, draft.shouldSave ? "Orari riconosciuti. Hai detto anche salva." : "Anteprima pronta. Controlla e salva.", "success");
     return draft;
   } catch (error) {
     state.adminVoiceDraft = null;
-    renderVoiceEmpty(els.voicePreview, "Nessuna anteprima", "Non ho riconosciuto bene dipendente, data o orari.");
+    renderVoiceEmpty(els.voicePreview, "Nessun orario", "Non ho riconosciuto dipendente, data o fascia.");
     setMsg(els.voiceMsg, error.message, "error");
     return null;
   }
 }
 
-async function saveAdminVoiceDraft() {
-  if (!state.currentUser || state.currentUser.role !== "admin") return;
-  const draft = state.adminVoiceDraft || parseAdminVoice();
+async function parseAndSaveAdminVoice() {
+  const draft = parseAdminVoice();
   if (!draft) return;
+  await saveAdminVoiceDraft(draft);
+}
 
+async function saveAdminVoiceDraft(draft = state.adminVoiceDraft || parseAdminVoice()) {
+  if (!state.currentUser || state.currentUser.role !== "admin" || !draft) return;
   try {
+    setMsg(els.voiceMsg, "Salvataggio in corso...");
     await saveVoiceDraft(draft);
     const first = draft.days[0];
     els.adminDay.value = first.date;
@@ -501,96 +659,149 @@ async function saveAdminVoiceDraft() {
     await loadAdminDayReport();
     await loadAdminMonthReport();
     await loadAdminEmployeeMonthReport({ silent: true });
-    setMsg(els.voiceMsg, `Salvato per ${draft.employee.name || "dipendente"}: ${draft.days.length} ${draft.days.length === 1 ? "giorno" : "giorni"}.`, "success");
+    setMsg(els.voiceMsg, `Salvato automaticamente per ${draft.employee.name || "dipendente"}.`, "success");
   } catch (error) {
-    setMsg(els.voiceMsg, error.message, "error");
+    setMsg(els.voiceMsg, error.message || "Salvataggio non riuscito.", "error");
   }
 }
 
 async function saveVoiceDraft(draft) {
-  if (!draft?.employee || !draft.days?.length) throw new Error("Prima crea un'anteprima valida.");
-
+  if (!draft?.employee || !draft.days?.length) throw new Error("Prima inserisci una frase valida.");
   for (const day of draft.days) {
     await saveWorkSessionForEmployee(draft.employee, day.date, day.slots);
   }
-
   return draft;
 }
 
 function buildVoiceDraft({ text, baseDate, employee, employees = [], allowEmployeeFromText = false }) {
   if (!text) throw new Error("Detta o scrivi una frase con gli orari.");
 
-  const normalized = normalizeText(text);
+  const normalized = normalizeVoiceText(text);
   const detectedEmployee = allowEmployeeFromText ? findEmployeeInText(normalized, employees) : null;
   const finalEmployee = detectedEmployee || employee;
   if (!finalEmployee?.id) throw new Error("Seleziona un dipendente.");
 
   const dates = parseDatesFromText(normalized, baseDate);
   const ranges = parseTimeRanges(normalized);
-  if (!ranges.length) throw new Error("Non ho trovato fasce orarie. Esempio: oggi dalle 10 alle 21.");
+  if (!ranges.length) throw new Error("Non ho trovato fasce orarie. Prova: oggi dalle 10 alle 13 e dalle 15 alle 18.");
 
   const slots = rangesToSlots(ranges);
-  if (!slots.length) throw new Error("Gli orari devono essere validi e a mezz'ora, per esempio 10:00 o 10:30.");
+  if (!slots.length) throw new Error("Usa orari interi o a mezz'ora, per esempio 10 oppure 10:30.");
 
-  const days = dates.map(date => ({ date, slots, ranges, totalHours: slots.length * 0.5 }));
-  const shouldSave = /\b(salva|salvami|salvamele|salvamelo|conferma|registra|registrami)\b/.test(normalized);
-
-  return {
-    employee: finalEmployee,
-    days,
-    ranges,
-    shouldSave,
-    originalText: text
-  };
+  const days = dates.map((date) => ({ date, slots, ranges, totalHours: slots.length * 0.5 }));
+  return { employee: finalEmployee, days, ranges, originalText: text };
 }
 
-function startVoiceDictation(textarea, msgEl, afterResult) {
+function startVoiceDictation({ textarea, msgEl, button, onFinal }) {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Recognition) {
-    setMsg(msgEl, "Dettatura non supportata su questo browser. Puoi scrivere la frase a mano.", "error");
+    setMsg(msgEl, "Questo browser non supporta il microfono dell'app. Usa la dettatura della tastiera e premi “Interpreta e salva”.", "error");
+    textarea?.focus();
+    return;
+  }
+
+  if (state.activeRecognition) {
+    stopActiveRecognition();
     return;
   }
 
   const recognition = new Recognition();
   recognition.lang = "it-IT";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 3;
 
-  recognition.onstart = () => setMsg(msgEl, "Sto ascoltando...", "success");
-  recognition.onerror = () => setMsg(msgEl, "Non sono riuscito a capire il vocale. Riprova o scrivi la frase.", "error");
-  recognition.onresult = async (event) => {
-    const transcript = event.results?.[0]?.[0]?.transcript || "";
-    textarea.value = transcript;
-    setMsg(msgEl, `Ho capito: “${transcript}”`, "success");
-    const draft = afterResult();
-    if (draft?.shouldSave) {
-      if (textarea === els.personalVoiceText) await savePersonalVoiceDraft();
-      else await saveAdminVoiceDraft();
-    }
+  let finalTranscript = "";
+  let lastVisibleTranscript = "";
+  let hasError = false;
+  let handled = false;
+
+  state.activeRecognition = recognition;
+  state.activeVoiceButton = button;
+
+  recognition.onstart = () => {
+    button.textContent = "■ Ferma";
+    button.classList.add("listening");
+    setMsg(msgEl, "Sto ascoltando... parla lentamente.", "success");
   };
 
-  recognition.start();
+  recognition.onresult = (event) => {
+    let interim = "";
+    for (let index = event.resultIndex; index < event.results.length; index++) {
+      const transcript = event.results[index][0]?.transcript || "";
+      if (event.results[index].isFinal) finalTranscript += `${transcript} `;
+      else interim += transcript;
+    }
+    lastVisibleTranscript = `${finalTranscript}${interim}`.trim();
+    textarea.value = lastVisibleTranscript;
+    setMsg(msgEl, `Ho capito: “${lastVisibleTranscript}”`, "success");
+  };
+
+  recognition.onerror = (event) => {
+    hasError = true;
+    const messages = {
+      "not-allowed": "Permesso microfono negato. Abilitalo nelle impostazioni del browser.",
+      "service-not-allowed": "Il servizio di dettatura non è disponibile.",
+      "audio-capture": "Microfono non disponibile.",
+      "no-speech": "Non ho sentito la voce. Riprova parlando più vicino al telefono.",
+      "network": "Errore di rete durante la dettatura."
+    };
+    setMsg(msgEl, messages[event.error] || "Dettatura interrotta. Riprova.", "error");
+  };
+
+  recognition.onend = async () => {
+    cleanupRecognitionButton();
+    if (hasError || handled) return;
+    handled = true;
+    const transcript = (finalTranscript || lastVisibleTranscript || textarea.value).trim();
+    if (!transcript) {
+      setMsg(msgEl, "Non ho ricevuto alcuna frase.", "error");
+      return;
+    }
+    textarea.value = transcript;
+    await onFinal();
+  };
+
+  try {
+    recognition.start();
+  } catch (error) {
+    cleanupRecognitionButton();
+    setMsg(msgEl, "Il microfono è già attivo. Chiudilo e riprova.", "error");
+  }
+}
+
+function stopActiveRecognition() {
+  if (!state.activeRecognition) return;
+  try { state.activeRecognition.stop(); } catch {}
+}
+
+function cleanupRecognitionButton() {
+  if (state.activeVoiceButton) {
+    const isPersonal = state.activeVoiceButton === els.startPersonalVoiceBtn;
+    state.activeVoiceButton.textContent = isPersonal ? "🎙️ Inizia" : "🎙️ Dettatura";
+    state.activeVoiceButton.classList.remove("listening");
+  }
+  state.activeRecognition = null;
+  state.activeVoiceButton = null;
 }
 
 function renderVoicePreview(container, draft) {
   const totalHours = draft.days.reduce((sum, day) => sum + day.totalHours, 0);
-  const dayText = draft.days.length === 1 ? formatDateIT(draft.days[0].date) : `${formatDateIT(draft.days[0].date)} - ${formatDateIT(draft.days[draft.days.length - 1].date)}`;
+  const dayText = draft.days.length === 1
+    ? formatDateIT(draft.days[0].date)
+    : `${formatDateIT(draft.days[0].date)} - ${formatDateIT(draft.days[draft.days.length - 1].date)}`;
   container.innerHTML = `
     <div class="summary-item voice-ready">
       <strong>${escapeHTML(draft.employee.name || "Dipendente")}</strong>
       <div class="big">${escapeHTML(formatRanges({ ranges: draft.ranges }))}</div>
-      <small>${escapeHTML(dayText)} • ${totalHours.toFixed(2)} ore totali${draft.shouldSave ? " • salvataggio richiesto" : ""}</small>
+      <small>${escapeHTML(dayText)} • ${totalHours.toFixed(2)} ore totali</small>
     </div>
   `;
 }
 
 function renderVoiceEmpty(container, title, subtitle) {
-  container.innerHTML = `
-    <div class="summary-item">
-      <strong>${escapeHTML(title)}</strong>
-      <small>${escapeHTML(subtitle)}</small>
-    </div>
-  `;
+  if (!container) return;
+  container.innerHTML = `<div class="summary-item"><strong>${escapeHTML(title)}</strong><small>${escapeHTML(subtitle)}</small></div>`;
 }
 
 function normalizeText(text) {
@@ -603,19 +814,47 @@ function normalizeText(text) {
     .trim();
 }
 
+function normalizeVoiceText(text) {
+  let normalized = normalizeText(text)
+    .replace(/\bmezzogiorno\b/g, "12")
+    .replace(/\bmezzanotte\b/g, "0");
+
+  const numberWords = {
+    zero: 0, una: 1, uno: 1, un: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6,
+    sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12, tredici: 13,
+    quattordici: 14, quindici: 15, sedici: 16, diciassette: 17, diciotto: 18,
+    diciannove: 19, venti: 20, ventuno: 21, ventidue: 22, ventitre: 23, ventiquattro: 24,
+    trenta: 30
+  };
+
+  const words = Object.keys(numberWords).sort((a, b) => b.length - a.length).join("|");
+  normalized = normalized.replace(new RegExp(`\\b(${words})\\b`, "g"), (match) => String(numberWords[match]));
+  normalized = normalized
+    .replace(/\b(\d{1,2})\s*(?:e\s*)?(?:mezza|mezzo)\b/g, "$1:30")
+    .replace(/\b(\d{1,2})\s+e\s+30\b/g, "$1:30")
+    .replace(/\b(\d{1,2})\s+e\s+0\b/g, "$1:00")
+    .replace(/\bore\s+(\d{1,2})\b/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized;
+}
+
 function findEmployeeInText(normalizedText, employees) {
-  return employees.find(emp => {
-    const name = normalizeText(emp.name || "");
-    const username = normalizeText(emp.username || "");
+  return employees.find((employee) => {
+    const name = normalizeText(employee.name || "");
+    const username = normalizeText(employee.username || "");
     if (name && normalizedText.includes(name)) return true;
     if (username && normalizedText.includes(username)) return true;
     const firstName = name.split(" ")[0];
-    return firstName.length >= 3 && normalizedText.includes(firstName);
+    return firstName.length >= 3 && new RegExp(`\\b${escapeRegExp(firstName)}\\b`).test(normalizedText);
   }) || null;
 }
 
 function parseDatesFromText(text, baseDate) {
   const base = new Date(`${baseDate}T12:00:00`);
+  if (Number.isNaN(base.getTime())) throw new Error("Data di riferimento non valida.");
+
   const monthNames = {
     gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
     luglio: 7, agosto: 8, settembre: 9, ottobre: 10, novembre: 11, dicembre: 12
@@ -627,44 +866,53 @@ function parseDatesFromText(text, baseDate) {
     const endDay = Number(rangeMatch[2]);
     const month = rangeMatch[3] ? monthNames[rangeMatch[3]] : base.getMonth() + 1;
     const year = rangeMatch[4] ? Number(rangeMatch[4]) : base.getFullYear();
-    if (endDay < startDay) throw new Error("Intervallo date non valido.");
+    if (endDay < startDay) throw new Error("Intervallo di date non valido.");
     const dates = [];
-    for (let day = startDay; day <= endDay; day++) {
-      dates.push(dateToYMD(new Date(year, month - 1, day)));
-    }
+    for (let day = startDay; day <= endDay; day++) dates.push(makeValidYMD(year, month, day));
     return dates;
   }
 
+  if (/\bdopodomani\b/.test(text)) return [dateToYMD(addDays(base, 2))];
   if (/\bdomani\b/.test(text)) return [dateToYMD(addDays(base, 1))];
   if (/\bieri\b/.test(text)) return [dateToYMD(addDays(base, -1))];
   if (/\boggi\b/.test(text)) return [dateToYMD(base)];
 
-  const numericDate = text.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+  const weekdayNames = { domenica: 0, lunedi: 1, martedi: 2, mercoledi: 3, giovedi: 4, venerdi: 5, sabato: 6 };
+  const weekdayMatch = text.match(/\b(domenica|lunedi|martedi|mercoledi|giovedi|venerdi|sabato)(?:\s+prossim[oa])?\b/);
+  if (weekdayMatch) {
+    const target = weekdayNames[weekdayMatch[1]];
+    let delta = (target - base.getDay() + 7) % 7;
+    if (/prossim[oa]/.test(weekdayMatch[0]) && delta === 0) delta = 7;
+    return [dateToYMD(addDays(base, delta))];
+  }
+
+  // Il trattino è volutamente escluso: "10-13" deve essere una fascia oraria, non una data.
+  const numericDate = text.match(/\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?\b/);
   if (numericDate) {
-    const day = Number(numericDate[1]);
-    const month = Number(numericDate[2]);
     let year = numericDate[3] ? Number(numericDate[3]) : base.getFullYear();
     if (year < 100) year += 2000;
-    return [dateToYMD(new Date(year, month - 1, day))];
+    return [makeValidYMD(year, Number(numericDate[2]), Number(numericDate[1]))];
   }
 
   const textDate = text.match(/\b(\d{1,2})\s+(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+(\d{4}))?\b/);
   if (textDate) {
-    const day = Number(textDate[1]);
-    const month = monthNames[textDate[2]];
     const year = textDate[3] ? Number(textDate[3]) : base.getFullYear();
-    return [dateToYMD(new Date(year, month - 1, day))];
+    return [makeValidYMD(year, monthNames[textDate[2]], Number(textDate[1]))];
   }
+
+  const simpleDay = text.match(/\b(?:il|giorno)\s+(\d{1,2})\b/);
+  if (simpleDay) return [makeValidYMD(base.getFullYear(), base.getMonth() + 1, Number(simpleDay[1]))];
 
   return [dateToYMD(base)];
 }
 
 function parseTimeRanges(text) {
   const ranges = [];
-  const rangeRegex = /(?:dalle?|da)?\s*(\d{1,2})(?:[:.,](\d{2}))?\s*(?:alle?|a|-|fino alle?|fino a)\s*(\d{1,2})(?:[:.,](\d{2}))?/g;
+  const timeText = stripDateExpressions(text);
+  const rangeRegex = /(?:dalle?|da)?\s*(\d{1,2})(?:\s*[:.,]\s*(\d{1,2}))?\s*(?:fino\s+alle?|fino\s+a|alle?|a|-)\s*(\d{1,2})(?:\s*[:.,]\s*(\d{1,2}))?/g;
   let match;
 
-  while ((match = rangeRegex.exec(text)) !== null) {
+  while ((match = rangeRegex.exec(timeText)) !== null) {
     const start = buildTime(match[1], match[2]);
     const end = buildTime(match[3], match[4]);
     if (start !== null && end !== null && end > start) {
@@ -675,9 +923,18 @@ function parseTimeRanges(text) {
   return mergeRanges(ranges);
 }
 
+function stripDateExpressions(text) {
+  return text
+    .replace(/\bdal\s+\d{1,2}(?:\s+\w+)?\s+al\s+\d{1,2}\s*(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)?(?:\s+\d{4})?/g, " ")
+    .replace(/\b\d{1,2}[\/.]\d{1,2}(?:[\/.]\d{2,4})?\b/g, " ")
+    .replace(/\b\d{1,2}\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)(?:\s+\d{4})?\b/g, " ")
+    .replace(/\b(?:il|giorno)\s+\d{1,2}\b/g, " ")
+    .replace(/\s+/g, " ");
+}
+
 function buildTime(hourText, minuteText = "0") {
-  let hour = Number(hourText);
-  let minute = Number(minuteText || 0);
+  const hour = Number(hourText);
+  const minute = Number(minuteText || 0);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
   if (hour < 0 || hour > 24 || minute < 0 || minute > 59) return null;
   if (hour === 24 && minute !== 0) return null;
@@ -687,35 +944,45 @@ function buildTime(hourText, minuteText = "0") {
 
 function rangesToSlots(ranges) {
   const slots = new Set();
-  ranges.forEach(range => {
+  ranges.forEach((range) => {
     const start = timeToMinutes(range.start);
     const end = timeToMinutes(range.end);
-    for (let m = start; m < end; m += 30) {
-      slots.add(minutesToTime(m));
-    }
+    for (let minutes = start; minutes < end; minutes += 30) slots.add(minutesToTime(minutes));
   });
   return [...slots].sort();
 }
 
 function mergeRanges(ranges) {
   const sorted = ranges
-    .map(range => ({ start: timeToMinutes(range.start), end: timeToMinutes(range.end) }))
+    .map((range) => ({ start: timeToMinutes(range.start), end: timeToMinutes(range.end) }))
     .sort((a, b) => a.start - b.start);
 
   const merged = [];
-  sorted.forEach(range => {
+  sorted.forEach((range) => {
     const last = merged[merged.length - 1];
     if (!last || range.start > last.end) merged.push({ ...range });
     else last.end = Math.max(last.end, range.end);
   });
 
-  return merged.map(range => ({ start: minutesToTime(range.start), end: minutesToTime(range.end) }));
+  return merged.map((range) => ({ start: minutesToTime(range.start), end: minutesToTime(range.end) }));
+}
+
+function makeValidYMD(year, month, day) {
+  const date = new Date(year, month - 1, day, 12, 0, 0);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    throw new Error("La data dettata non è valida.");
+  }
+  return dateToYMD(date);
 }
 
 function addDays(date, days) {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
   return copy;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function loadMyReports() {
