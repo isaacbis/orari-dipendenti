@@ -122,6 +122,16 @@ const els = {
   voicePreview: $("voicePreview")
 };
 
+function syncViewportHeight() {
+  const height = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+}
+
+syncViewportHeight();
+window.addEventListener("resize", syncViewportHeight, { passive: true });
+window.addEventListener("orientationchange", syncViewportHeight, { passive: true });
+window.visualViewport?.addEventListener("resize", syncViewportHeight, { passive: true });
+
 init();
 
 async function init() {
