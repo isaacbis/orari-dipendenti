@@ -203,7 +203,7 @@ function bindEvents() {
   });
   on(els.voiceEmployee, "change", () => {
     state.adminVoiceDraft = null;
-    renderVoiceEmpty(els.voicePreview, "Nessun orario", "Detta o scrivi gli orari del dipendente scelto.");
+    renderVoiceEmpty(els.voicePreview, "Nessun orario", "");
   });
   on(els.voiceDate, "change", () => { state.adminVoiceDraft = null; });
 
@@ -461,7 +461,7 @@ function queueAutoSave(delay = 350) {
   };
 
   markSaveStatus("Salvataggio...", "saving");
-  setMsg(els.saveMsg, "Salvataggio automatico in corso...");
+  setMsg(els.saveMsg, "");
 
   state.saveTimer = setTimeout(() => {
     state.saveTimer = null;
@@ -495,7 +495,7 @@ async function persistDaySnapshot(snapshot) {
 
     if (snapshot.version === state.saveVersion) {
       markSaveStatus("Salvato", "saved");
-      setMsg(els.saveMsg, snapshot.slots.length ? "Orari salvati automaticamente." : "Giornata svuotata e salvata.", "success");
+      setMsg(els.saveMsg, "");
     }
 
     await loadMyReports();
@@ -515,8 +515,11 @@ async function persistDaySnapshot(snapshot) {
 
 function markSaveStatus(text, type) {
   if (!els.autoSaveBadge) return;
-  els.autoSaveBadge.textContent = text;
+  const symbols = { saved: "✓", saving: "…", error: "!" };
+  els.autoSaveBadge.textContent = symbols[type] || "✓";
   els.autoSaveBadge.className = `save-badge ${type}`;
+  els.autoSaveBadge.setAttribute("aria-label", text);
+  els.autoSaveBadge.title = text;
 }
 
 async function loadSelectedDay() {
@@ -534,7 +537,7 @@ async function loadSelectedDay() {
     state.selectedSlots = new Set(snap.exists() ? (snap.data().slots || []) : []);
     renderSelectedState();
     markSaveStatus("Salvato", "saved");
-    setMsg(els.saveMsg, snap.exists() ? "Orario caricato." : "Nessun orario per questa data.");
+    setMsg(els.saveMsg, "");
   } catch (error) {
     console.error(error);
     markSaveStatus("Errore", "error");
@@ -598,7 +601,7 @@ async function parseAndSavePersonalVoice() {
 async function savePersonalVoiceDraft(draft = state.personalVoiceDraft || parsePersonalVoice()) {
   if (!state.currentUser || !draft) return;
   try {
-    setMsg(els.personalVoiceMsg, "Salvataggio in corso...");
+    setMsg(els.personalVoiceMsg, "");
     await saveVoiceDraft(draft);
     const last = draft.days[draft.days.length - 1];
     els.selectedDate.value = last.date;
@@ -608,7 +611,7 @@ async function savePersonalVoiceDraft(draft = state.personalVoiceDraft || parseP
     renderSelectedState();
     markSaveStatus("Salvato", "saved");
     await loadMyReports();
-    setMsg(els.personalVoiceMsg, `Salvato automaticamente: ${formatRanges({ ranges: last.ranges })}.`, "success");
+    setMsg(els.personalVoiceMsg, "Salvato.", "success");
   } catch (error) {
     setMsg(els.personalVoiceMsg, error.message || "Salvataggio non riuscito.", "error");
   }
@@ -649,7 +652,7 @@ async function parseAndSaveAdminVoice() {
 async function saveAdminVoiceDraft(draft = state.adminVoiceDraft || parseAdminVoice()) {
   if (!state.currentUser || state.currentUser.role !== "admin" || !draft) return;
   try {
-    setMsg(els.voiceMsg, "Salvataggio in corso...");
+    setMsg(els.voiceMsg, "");
     await saveVoiceDraft(draft);
     const first = draft.days[0];
     els.adminDay.value = first.date;
@@ -659,7 +662,7 @@ async function saveAdminVoiceDraft(draft = state.adminVoiceDraft || parseAdminVo
     await loadAdminDayReport();
     await loadAdminMonthReport();
     await loadAdminEmployeeMonthReport({ silent: true });
-    setMsg(els.voiceMsg, `Salvato automaticamente per ${draft.employee.name || "dipendente"}.`, "success");
+    setMsg(els.voiceMsg, `Salvato per ${draft.employee.name || "dipendente"}.`, "success");
   } catch (error) {
     setMsg(els.voiceMsg, error.message || "Salvataggio non riuscito.", "error");
   }
@@ -695,7 +698,7 @@ function buildVoiceDraft({ text, baseDate, employee, employees = [], allowEmploy
 function startVoiceDictation({ textarea, msgEl, button, onFinal }) {
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!Recognition) {
-    setMsg(msgEl, "Questo browser non supporta il microfono dell'app. Usa la dettatura della tastiera e premi “Interpreta e salva”.", "error");
+    setMsg(msgEl, "Microfono non supportato. Scrivi gli orari e premi Salva.", "error");
     textarea?.focus();
     return;
   }
@@ -722,7 +725,7 @@ function startVoiceDictation({ textarea, msgEl, button, onFinal }) {
   recognition.onstart = () => {
     button.textContent = "■ Ferma";
     button.classList.add("listening");
-    setMsg(msgEl, "Sto ascoltando... parla lentamente.", "success");
+    setMsg(msgEl, "In ascolto…", "success");
   };
 
   recognition.onresult = (event) => {
@@ -734,7 +737,7 @@ function startVoiceDictation({ textarea, msgEl, button, onFinal }) {
     }
     lastVisibleTranscript = `${finalTranscript}${interim}`.trim();
     textarea.value = lastVisibleTranscript;
-    setMsg(msgEl, `Ho capito: “${lastVisibleTranscript}”`, "success");
+    setMsg(msgEl, "In ascolto…", "success");
   };
 
   recognition.onerror = (event) => {
@@ -777,8 +780,7 @@ function stopActiveRecognition() {
 
 function cleanupRecognitionButton() {
   if (state.activeVoiceButton) {
-    const isPersonal = state.activeVoiceButton === els.startPersonalVoiceBtn;
-    state.activeVoiceButton.textContent = isPersonal ? "🎙️ Inizia" : "🎙️ Dettatura";
+    state.activeVoiceButton.textContent = "🎙️ Detta";
     state.activeVoiceButton.classList.remove("listening");
   }
   state.activeRecognition = null;
@@ -799,9 +801,10 @@ function renderVoicePreview(container, draft) {
   `;
 }
 
-function renderVoiceEmpty(container, title, subtitle) {
+function renderVoiceEmpty(container, title, subtitle = "") {
   if (!container) return;
-  container.innerHTML = `<div class="summary-item"><strong>${escapeHTML(title)}</strong><small>${escapeHTML(subtitle)}</small></div>`;
+  const detail = subtitle ? `<small>${escapeHTML(subtitle)}</small>` : "";
+  container.innerHTML = `<div class="summary-item"><strong>${escapeHTML(title)}</strong>${detail}</div>`;
 }
 
 function normalizeText(text) {

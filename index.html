@@ -20,7 +20,6 @@
         <div class="brand-box">
           <div class="brand-badge">T38</div>
           <h1>Orari dipendenti</h1>
-          <p>Accesso rapido agli orari di lavoro</p>
         </div>
 
         <div class="card card-login">
@@ -43,7 +42,6 @@
         <div class="user-block">
           <div class="mini-logo">T38</div>
           <div>
-            <span>Benvenuto</span>
             <strong id="welcomeName">Utente</strong>
           </div>
         </div>
@@ -57,11 +55,8 @@
         <section id="tabSchedule" class="tab-panel active schedule-screen">
           <div class="card work-card">
             <div class="card-title-row">
-              <div>
-                <span class="overline">Giornata</span>
-                <h2>Inserisci orario</h2>
-              </div>
-              <div id="autoSaveBadge" class="save-badge saved">Salvato</div>
+              <h2>Orari</h2>
+              <div id="autoSaveBadge" class="save-badge saved" role="status" aria-label="Salvato" title="Salvato">✓</div>
             </div>
 
             <div class="field compact-field">
@@ -81,7 +76,7 @@
               </div>
             </div>
 
-            <button id="addRangeBtn" class="btn btn-primary btn-lg" type="button">Aggiungi e salva</button>
+            <button id="addRangeBtn" class="btn btn-primary btn-lg" type="button">Aggiungi</button>
 
             <div class="day-summary-row">
               <div>
@@ -89,7 +84,7 @@
                 <strong id="dayHours">0.00</strong>
               </div>
               <div>
-                <span>Mezz'ore</span>
+                <span>Slot</span>
                 <strong id="slotCount">0</strong>
               </div>
             </div>
@@ -101,27 +96,20 @@
           <div class="quick-actions">
             <button id="openVoiceModalBtn" class="action-card voice-action" type="button">
               <span class="action-icon">🎙️</span>
-              <span><strong>Detta gli orari</strong><small>Riconosce e salva da solo</small></span>
+              <span><strong>Dettatura</strong></span>
             </button>
             <button id="openQuickSlotsBtn" class="action-card" type="button">
               <span class="action-icon">◷</span>
-              <span><strong>Orari rapidi</strong><small>Modifica ogni mezz'ora</small></span>
+              <span><strong>Orari rapidi</strong></span>
             </button>
           </div>
 
-          <div class="tip-card">
-            <strong>Salvataggio automatico attivo</strong>
-            <span>Ogni modifica viene registrata su Firebase senza un secondo pulsante.</span>
-          </div>
         </section>
 
         <section id="tabReports" class="tab-panel report-screen">
           <div class="card fill-card">
             <div class="card-title-row">
-              <div>
-                <span class="overline">Riepilogo</span>
-                <h2>Report personale</h2>
-              </div>
+              <h2>Report</h2>
             </div>
 
             <div class="report-filter-row">
@@ -147,7 +135,7 @@
         <section id="tabAdmin" class="tab-panel admin-screen">
           <div class="admin-toolbar card">
             <div class="field compact-field no-bottom">
-              <label for="adminModuleSelect">Funzione amministratore</label>
+              <label for="adminModuleSelect">Funzione</label>
               <select id="adminModuleSelect">
                 <option value="adminVoiceModule">Dettatura dipendenti</option>
                 <option value="adminEmployeesModule">Gestione dipendenti</option>
@@ -161,7 +149,7 @@
           <div class="admin-module-wrap">
             <section id="adminVoiceModule" class="admin-module active card">
               <div class="card-title-row compact-title">
-                <div><span class="overline">Admin</span><h2>Detta ore dipendente</h2></div>
+                <h2>Dettatura dipendente</h2>
               </div>
               <div class="field-grid">
                 <div class="field compact-field">
@@ -169,26 +157,26 @@
                   <select id="voiceEmployee"></select>
                 </div>
                 <div class="field compact-field">
-                  <label for="voiceDate">Data base</label>
+                  <label for="voiceDate">Data</label>
                   <input id="voiceDate" type="date" />
                 </div>
               </div>
               <div class="field compact-field">
-                <label for="voiceText">Frase</label>
+                <label for="voiceText">Orari</label>
                 <textarea id="voiceText" rows="3" placeholder="Marco oggi dalle 10 alle 13 e dalle 15 alle 18"></textarea>
               </div>
               <div class="action-row">
-                <button id="startVoiceBtn" class="btn btn-secondary" type="button">🎙️ Dettatura</button>
-                <button id="parseVoiceBtn" class="btn btn-primary" type="button">Interpreta e salva</button>
+                <button id="startVoiceBtn" class="btn btn-secondary" type="button">🎙️ Detta</button>
+                <button id="parseVoiceBtn" class="btn btn-primary" type="button">Salva</button>
               </div>
               <p id="voiceMsg" class="msg"></p>
               <div id="voicePreview" class="voice-preview">
-                <div class="summary-item"><strong>Nessun orario</strong><small>La dettatura salva automaticamente.</small></div>
+                <div class="summary-item"><strong>Nessun orario</strong></div>
               </div>
             </section>
 
             <section id="adminEmployeesModule" class="admin-module card">
-              <div class="card-title-row compact-title"><div><span class="overline">Admin</span><h2>Dipendenti</h2></div></div>
+              <div class="card-title-row compact-title"><h2>Dipendenti</h2></div>
               <div class="field-grid employee-form-grid">
                 <div class="field compact-field"><label for="empName">Nome</label><input id="empName" type="text" placeholder="Mario Rossi" /></div>
                 <div class="field compact-field"><label for="empUsername">Username</label><input id="empUsername" type="text" placeholder="mario" /></div>
@@ -201,7 +189,7 @@
             </section>
 
             <section id="adminDayModule" class="admin-module card">
-              <div class="card-title-row compact-title"><div><span class="overline">Admin</span><h2>Report giornaliero</h2></div></div>
+              <div class="card-title-row compact-title"><h2>Report giornaliero</h2></div>
               <div class="report-filter-row">
                 <div class="field compact-field grow"><label for="adminDay">Data</label><input id="adminDay" type="date" /></div>
                 <button id="loadAdminDayBtn" class="btn btn-secondary square-btn" type="button">↻</button>
@@ -210,7 +198,7 @@
             </section>
 
             <section id="adminMonthModule" class="admin-module card">
-              <div class="card-title-row compact-title"><div><span class="overline">Admin</span><h2>Mensile generale</h2></div></div>
+              <div class="card-title-row compact-title"><h2>Mensile generale</h2></div>
               <div class="report-filter-row">
                 <div class="field compact-field grow"><label for="adminMonth">Mese</label><input id="adminMonth" type="month" /></div>
                 <button id="loadAdminMonthBtn" class="btn btn-secondary square-btn" type="button">↻</button>
@@ -219,7 +207,7 @@
             </section>
 
             <section id="adminPdfModule" class="admin-module card pdf-module">
-              <div class="card-title-row compact-title"><div><span class="overline">Admin</span><h2>Report mensile PDF</h2></div></div>
+              <div class="card-title-row compact-title"><h2>Report PDF</h2></div>
               <div class="field-grid">
                 <div class="field compact-field"><label for="adminReportEmployee">Dipendente</label><select id="adminReportEmployee"></select></div>
                 <div class="field compact-field"><label for="adminReportMonth">Mese</label><input id="adminReportMonth" type="month" /></div>
@@ -252,13 +240,13 @@
   <div id="quickSlotsModal" class="modal-layer hidden" aria-hidden="true">
     <div class="modal-card slots-modal-card">
       <div class="modal-head">
-        <div><span class="overline">Selezione rapida</span><h2>Orari ogni mezz'ora</h2></div>
+        <h2>Orari rapidi</h2>
         <button class="icon-btn" id="closeQuickSlotsBtn" type="button" aria-label="Chiudi">×</button>
       </div>
       <div id="slotGrid" class="slot-grid"></div>
       <div class="modal-footer">
-        <button id="clearSlotsBtn" class="btn btn-light" type="button">Svuota giornata</button>
-        <button id="doneQuickSlotsBtn" class="btn btn-primary" type="button">Fine</button>
+        <button id="clearSlotsBtn" class="btn btn-light" type="button">Svuota</button>
+        <button id="doneQuickSlotsBtn" class="btn btn-primary" type="button">Chiudi</button>
       </div>
     </div>
   </div>
@@ -266,18 +254,17 @@
   <div id="personalVoiceModal" class="modal-layer hidden" aria-hidden="true">
     <div class="modal-card voice-modal-card">
       <div class="modal-head">
-        <div><span class="overline">Dettatura</span><h2>Le tue ore</h2></div>
+        <h2>Dettatura</h2>
         <button class="icon-btn" id="closeVoiceModalBtn" type="button" aria-label="Chiudi">×</button>
       </div>
-      <p class="helper">Esempio: “oggi dalle dieci alle tredici e dalle quindici alle diciotto”. Al termine salva automaticamente.</p>
-      <div class="field compact-field"><label for="personalVoiceDate">Data base</label><input id="personalVoiceDate" type="date" /></div>
-      <div class="field compact-field"><label for="personalVoiceText">Frase riconosciuta</label><textarea id="personalVoiceText" rows="3" placeholder="Oggi dalle 10 alle 13 e dalle 15 alle 18"></textarea></div>
+      <div class="field compact-field"><label for="personalVoiceDate">Data</label><input id="personalVoiceDate" type="date" /></div>
+      <div class="field compact-field"><label for="personalVoiceText">Orari</label><textarea id="personalVoiceText" rows="3" placeholder="Oggi dalle 10 alle 13 e dalle 15 alle 18"></textarea></div>
       <div class="action-row">
-        <button id="startPersonalVoiceBtn" class="btn btn-secondary" type="button">🎙️ Inizia</button>
-        <button id="parsePersonalVoiceBtn" class="btn btn-primary" type="button">Interpreta e salva</button>
+        <button id="startPersonalVoiceBtn" class="btn btn-secondary" type="button">🎙️ Detta</button>
+        <button id="parsePersonalVoiceBtn" class="btn btn-primary" type="button">Salva</button>
       </div>
       <p id="personalVoiceMsg" class="msg"></p>
-      <div id="personalVoicePreview" class="voice-preview"><div class="summary-item"><strong>Nessun orario</strong><small>Premi il microfono e parla.</small></div></div>
+      <div id="personalVoicePreview" class="voice-preview"><div class="summary-item"><strong>Nessun orario</strong></div></div>
     </div>
   </div>
 
