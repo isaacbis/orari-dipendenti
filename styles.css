@@ -1415,3 +1415,154 @@ p {
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Fix layout pannelli Admin e Mensile generale */
+.admin-module.active > .internal-list {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+#adminDayReport,
+#adminMonthReport,
+#employeeList {
+  align-content: start;
+  margin-top: 10px;
+  padding: 1px 2px 4px 0;
+}
+
+#adminMonthReport {
+  position: relative;
+  gap: 8px;
+}
+
+.month-overview {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 0 0 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98) 78%, rgba(255,255,255,0));
+}
+
+.month-overview-card {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fff7ef, #fff);
+  box-shadow: var(--shadow-xs);
+}
+
+.month-overview-wide {
+  grid-column: 1 / -1;
+}
+
+.month-overview-card span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: .66rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.month-overview-card strong {
+  display: block;
+  max-width: 100%;
+  color: var(--text);
+  font-size: .94rem;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+
+.monthly-report-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.monthly-report-copy {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.monthly-report-copy strong,
+.monthly-report-copy small {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.monthly-report-copy strong {
+  margin-bottom: 4px;
+  font-size: .82rem;
+  line-height: 1.25;
+}
+
+.monthly-report-copy small {
+  color: var(--muted);
+  font-size: .69rem;
+}
+
+.monthly-report-hours {
+  min-width: 64px;
+  max-width: 92px;
+  padding: 7px 9px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: #8f3d08;
+  text-align: right;
+  overflow: hidden;
+}
+
+.monthly-report-hours strong,
+.monthly-report-hours span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monthly-report-hours strong {
+  margin: 0;
+  font-size: .88rem;
+  line-height: 1.1;
+}
+
+.monthly-report-hours span {
+  margin-top: 2px;
+  font-size: .61rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.empty-report {
+  align-self: start;
+}
+
+@media (max-width: 360px) {
+  .monthly-report-item {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .monthly-report-hours {
+    min-width: 58px;
+    padding-inline: 7px;
+  }
+
+  .month-overview-card {
+    padding: 9px;
+  }
+}

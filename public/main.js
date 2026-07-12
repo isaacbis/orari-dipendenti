@@ -1146,31 +1146,66 @@ async function loadAdminMonthReport() {
 
   filtered.forEach(item => {
     if (!map.has(item.employeeId)) map.set(item.employeeId, { name: item.employeeName, hours: 0 });
-    map.get(item.employeeId).hours += item.totalHours || 0;
+    map.get(item.employeeId).hours += Number(item.totalHours || 0);
   });
 
   els.adminMonthReport.innerHTML = "";
 
   if (!map.size) {
-    els.adminMonthReport.innerHTML = `<div class="report-item"><strong>Nessun dato</strong><small>Non ci sono orari salvati per ${month}.</small></div>`;
+    els.adminMonthReport.innerHTML = `<div class="report-item empty-report"><strong>Nessun dato</strong><small>Non ci sono orari salvati per ${escapeHTML(month || "il mese selezionato")}.</small></div>`;
     return;
   }
 
-  [...map.entries()]
-    .map(([id, v]) => ({ id, ...v }))
-    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
-    .forEach(row => {
-      const employee = state.employees.find(e => e.id === row.id);
+  const rows = [...map.entries()]
+    .map(([id, value]) => {
+      const employee = state.employees.find(item => item.id === id);
       const rate = Number(employee?.hourlyRate || 0);
-      const div = document.createElement("div");
-      div.className = "report-item";
-      div.innerHTML = `
-        <strong>${escapeHTML(row.name || "Dipendente")}</strong>
-        <div class="big">${row.hours.toFixed(2)} ore</div>
-        <small>Compenso stimato: ${formatEuro(row.hours * rate)}</small>
-      `;
-      els.adminMonthReport.appendChild(div);
-    });
+      const hours = Number(value.hours || 0);
+      return {
+        id,
+        name: value.name || employee?.name || "Dipendente",
+        hours,
+        pay: hours * rate
+      };
+    })
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "it"));
+
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
+  const totalPay = rows.reduce((sum, row) => sum + row.pay, 0);
+
+  const overview = document.createElement("div");
+  overview.className = "month-overview";
+  overview.innerHTML = `
+    <div class="month-overview-card">
+      <span>Dipendenti</span>
+      <strong>${rows.length}</strong>
+    </div>
+    <div class="month-overview-card">
+      <span>Ore totali</span>
+      <strong>${totalHours.toFixed(2)}</strong>
+    </div>
+    <div class="month-overview-card month-overview-wide">
+      <span>Compenso stimato</span>
+      <strong>${formatEuro(totalPay)}</strong>
+    </div>
+  `;
+  els.adminMonthReport.appendChild(overview);
+
+  rows.forEach(row => {
+    const div = document.createElement("div");
+    div.className = "report-item monthly-report-item";
+    div.innerHTML = `
+      <div class="monthly-report-copy">
+        <strong>${escapeHTML(row.name)}</strong>
+        <small>${formatEuro(row.pay)}</small>
+      </div>
+      <div class="monthly-report-hours">
+        <strong>${row.hours.toFixed(2)}</strong>
+        <span>ore</span>
+      </div>
+    `;
+    els.adminMonthReport.appendChild(div);
+  });
 }
 
 async function loadAdminEmployeeMonthReport(options = {}) {
