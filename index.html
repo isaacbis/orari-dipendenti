@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#ff8a2c" />
+  <meta name="theme-color" content="#f47721" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -18,8 +18,9 @@
     <section id="loginView" class="login-screen">
       <div class="login-content">
         <div class="brand-box">
-          <div class="brand-badge">T38</div>
+          <div class="brand-badge"><span>T38</span></div>
           <h1>Orari dipendenti</h1>
+          <p class="brand-subtitle">Gestione semplice delle ore</p>
         </div>
 
         <div class="card card-login">
@@ -47,7 +48,9 @@
         </div>
         <div class="header-actions">
           <span id="roleBadge" class="chip">Dipendente</span>
-          <button id="logoutBtn" class="icon-btn" type="button" aria-label="Esci">↪</button>
+          <button id="logoutBtn" class="icon-btn" type="button" aria-label="Esci" title="Esci">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6.8A1.8 1.8 0 0 0 5 6.8v10.4A1.8 1.8 0 0 0 6.8 19H10M14.5 8.5 18 12l-3.5 3.5M9 12h9"/></svg>
+          </button>
         </div>
       </header>
 
@@ -69,14 +72,17 @@
                 <label for="rangeStart">Inizio</label>
                 <input id="rangeStart" type="time" step="1800" />
               </div>
-              <div class="time-arrow">→</div>
+              <div class="time-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></svg></div>
               <div class="field compact-field">
                 <label for="rangeEnd">Fine</label>
                 <input id="rangeEnd" type="time" step="1800" />
               </div>
             </div>
 
-            <button id="addRangeBtn" class="btn btn-primary btn-lg" type="button">Aggiungi</button>
+            <button id="addRangeBtn" class="btn btn-primary btn-lg" type="button">
+              <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Aggiungi fascia</span>
+            </button>
 
             <div class="day-summary-row">
               <div>
@@ -95,12 +101,14 @@
 
           <div class="quick-actions">
             <button id="openVoiceModalBtn" class="action-card voice-action" type="button">
-              <span class="action-icon">🎙️</span>
-              <span><strong>Dettatura</strong></span>
+              <span class="action-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg></span>
+              <span class="action-copy"><strong>Dettatura</strong></span>
+              <svg class="action-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
             </button>
             <button id="openQuickSlotsBtn" class="action-card" type="button">
-              <span class="action-icon">◷</span>
-              <span><strong>Orari rapidi</strong></span>
+              <span class="action-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></span>
+              <span class="action-copy"><strong>Orari rapidi</strong></span>
+              <svg class="action-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
             </button>
           </div>
 
@@ -117,7 +125,7 @@
                 <label for="reportMonth">Mese</label>
                 <input id="reportMonth" type="month" />
               </div>
-              <button id="loadMyReportBtn" class="btn btn-secondary square-btn" type="button" aria-label="Aggiorna">↻</button>
+              <button id="loadMyReportBtn" class="btn btn-secondary square-btn" type="button" aria-label="Aggiorna"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M18.5 9A7 7 0 0 0 6.2 6.5L4 9M5.5 15A7 7 0 0 0 17.8 17.5L20 15"/></svg></button>
             </div>
 
             <div class="stats-grid report-stats">
@@ -166,8 +174,8 @@
                 <textarea id="voiceText" rows="3" placeholder="Marco oggi dalle 10 alle 13 e dalle 15 alle 18"></textarea>
               </div>
               <div class="action-row">
-                <button id="startVoiceBtn" class="btn btn-secondary" type="button">🎙️ Detta</button>
-                <button id="parseVoiceBtn" class="btn btn-primary" type="button">Salva</button>
+                <button id="startVoiceBtn" class="btn btn-secondary" type="button"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg><span>Detta</span></button>
+                <button id="parseVoiceBtn" class="btn btn-primary" type="button"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Salva</span></button>
               </div>
               <p id="voiceMsg" class="msg"></p>
               <div id="voicePreview" class="voice-preview">
@@ -192,7 +200,7 @@
               <div class="card-title-row compact-title"><h2>Report giornaliero</h2></div>
               <div class="report-filter-row">
                 <div class="field compact-field grow"><label for="adminDay">Data</label><input id="adminDay" type="date" /></div>
-                <button id="loadAdminDayBtn" class="btn btn-secondary square-btn" type="button">↻</button>
+                <button id="loadAdminDayBtn" class="btn btn-secondary square-btn" type="button" aria-label="Aggiorna"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M18.5 9A7 7 0 0 0 6.2 6.5L4 9M5.5 15A7 7 0 0 0 17.8 17.5L20 15"/></svg></button>
               </div>
               <div id="adminDayReport" class="report-cards internal-list"></div>
             </section>
@@ -201,7 +209,7 @@
               <div class="card-title-row compact-title"><h2>Mensile generale</h2></div>
               <div class="report-filter-row">
                 <div class="field compact-field grow"><label for="adminMonth">Mese</label><input id="adminMonth" type="month" /></div>
-                <button id="loadAdminMonthBtn" class="btn btn-secondary square-btn" type="button">↻</button>
+                <button id="loadAdminMonthBtn" class="btn btn-secondary square-btn" type="button" aria-label="Aggiorna"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M18.5 9A7 7 0 0 0 6.2 6.5L4 9M5.5 15A7 7 0 0 0 17.8 17.5L20 15"/></svg></button>
               </div>
               <div id="adminMonthReport" class="report-cards internal-list"></div>
             </section>
@@ -214,7 +222,7 @@
               </div>
               <div class="action-row">
                 <button id="loadEmployeeMonthBtn" class="btn btn-secondary" type="button">Mostra</button>
-                <button id="downloadEmployeePdfBtn" class="btn btn-primary" type="button">Scarica PDF</button>
+                <button id="downloadEmployeePdfBtn" class="btn btn-primary" type="button"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 19h14"/></svg><span>Scarica PDF</span></button>
               </div>
               <p id="employeePdfMsg" class="msg"></p>
               <div id="employeeMonthSummary" class="stats-grid mini-stats"></div>
@@ -230,15 +238,22 @@
       </main>
 
       <nav id="bottomNav" class="bottom-nav" aria-label="Navigazione principale">
-        <button class="tab-btn active" data-tab="tabSchedule" type="button"><span>◷</span><strong>Orari</strong></button>
-        <button class="tab-btn" data-tab="tabReports" type="button"><span>▤</span><strong>Report</strong></button>
-        <button class="tab-btn hidden" id="adminTabBtn" data-tab="tabAdmin" type="button"><span>⚙</span><strong>Admin</strong></button>
+        <button class="tab-btn active" data-tab="tabSchedule" type="button">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg><strong>Orari</strong>
+        </button>
+        <button class="tab-btn" data-tab="tabReports" type="button">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9M12 19V5M19 19v-7"/></svg><strong>Report</strong>
+        </button>
+        <button class="tab-btn hidden" id="adminTabBtn" data-tab="tabAdmin" type="button">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0M19 5v4M17 7h4"/></svg><strong>Admin</strong>
+        </button>
       </nav>
     </section>
   </div>
 
   <div id="quickSlotsModal" class="modal-layer hidden" aria-hidden="true">
     <div class="modal-card slots-modal-card">
+      <div class="modal-handle" aria-hidden="true"></div>
       <div class="modal-head">
         <h2>Orari rapidi</h2>
         <button class="icon-btn" id="closeQuickSlotsBtn" type="button" aria-label="Chiudi">×</button>
@@ -253,6 +268,7 @@
 
   <div id="personalVoiceModal" class="modal-layer hidden" aria-hidden="true">
     <div class="modal-card voice-modal-card">
+      <div class="modal-handle" aria-hidden="true"></div>
       <div class="modal-head">
         <h2>Dettatura</h2>
         <button class="icon-btn" id="closeVoiceModalBtn" type="button" aria-label="Chiudi">×</button>
@@ -260,8 +276,8 @@
       <div class="field compact-field"><label for="personalVoiceDate">Data</label><input id="personalVoiceDate" type="date" /></div>
       <div class="field compact-field"><label for="personalVoiceText">Orari</label><textarea id="personalVoiceText" rows="3" placeholder="Oggi dalle 10 alle 13 e dalle 15 alle 18"></textarea></div>
       <div class="action-row">
-        <button id="startPersonalVoiceBtn" class="btn btn-secondary" type="button">🎙️ Detta</button>
-        <button id="parsePersonalVoiceBtn" class="btn btn-primary" type="button">Salva</button>
+        <button id="startPersonalVoiceBtn" class="btn btn-secondary" type="button"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6"/></svg><span>Detta</span></button>
+        <button id="parsePersonalVoiceBtn" class="btn btn-primary" type="button"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Salva</span></button>
       </div>
       <p id="personalVoiceMsg" class="msg"></p>
       <div id="personalVoicePreview" class="voice-preview"><div class="summary-item"><strong>Nessun orario</strong></div></div>
